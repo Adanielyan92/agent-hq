@@ -3,13 +3,15 @@ import { db } from '@/lib/db';
 import { spaces } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { SpaceCard } from '@/components/spaces/SpaceCard';
 
 export default async function DashboardPage() {
   const session = await auth();
+  if (!session?.user?.id) redirect('/');
   const userSpaces = await db.query.spaces.findMany({
-    where: eq(spaces.owner_id, session!.user.id),
+    where: eq(spaces.owner_id, session.user.id),
     orderBy: (s, { desc }) => [desc(s.created_at)],
   });
 
