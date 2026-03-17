@@ -1,1 +1,59 @@
-/* Agent sprite sheet animations — populated in Task 12 */
+/* LPC sprite sheet — each frame is 64×64px */
+.sprite {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+}
+
+/* Sprite sources */
+.sprite-manager   { background-image: url('/sprites/manager.png'); }
+.sprite-developer { background-image: url('/sprites/developer.png'); }
+.sprite-reviewer  { background-image: url('/sprites/reviewer.png'); }
+.sprite-builder   { background-image: url('/sprites/builder.png'); }
+.sprite-scribe    { background-image: url('/sprites/scribe.png'); }
+
+/* States — using background-position to select frame */
+.sprite-idle    { background-position: 0 0; }
+.sprite-sleeping { background-position: 0 0; animation: bob 3s ease-in-out infinite; }
+.sprite-working { animation: typing 0.6s steps(4) infinite; }
+.sprite-queued  { animation: walk 0.8s steps(8) infinite; }
+.sprite-success { animation: celebrate 0.4s steps(4) 3; }
+.sprite-failed  { background-position: 0 -64px; /* head-down frame */ }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-3px); }
+}
+
+@keyframes typing {
+  from { background-position: 0    0; }
+  to   { background-position: -256px 0; } /* 4 typing frames × 64px */
+}
+
+@keyframes walk {
+  from { background-position: 0    0; }
+  to   { background-position: -512px 0; } /* 8 walk frames × 64px */
+}
+
+@keyframes celebrate {
+  from { background-position: 0    -128px; }
+  to   { background-position: -256px -128px; }
+}
+
+/* ZZZ bubble for sleeping */
+.sprite-sleeping::after {
+  content: 'zzz';
+  position: absolute;
+  top: -16px;
+  right: -8px;
+  font-size: 10px;
+  color: #a1a1aa;
+  font-family: var(--font-geist-mono);
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
+  50%       { transform: translateY(-4px) scale(1.1); opacity: 1; }
+}
