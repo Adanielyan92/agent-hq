@@ -19,7 +19,8 @@ describe('buildAgentStatus', () => {
   it('marks in_progress run as working', () => {
     const runs = [{ id: 1, name: 'Implement #42', path: '.github/workflows/claude-implement.yml',
       status: 'in_progress', conclusion: null, html_url: 'https://github.com/x',
-      created_at: recentTime, run_started_at: recentTime }];
+      created_at: recentTime, run_started_at: recentTime,
+      triggering_actor: null, event: 'issues' }];
     const statuses = buildAgentStatus(baseConfig, runs, [], [], []);
     const impl = statuses.find((s) => s.role === 'implementer');
     expect(impl?.state).toBe('working');
@@ -29,7 +30,8 @@ describe('buildAgentStatus', () => {
   it('marks cron-workflow with no recent run as sleeping', () => {
     const runs = [{ id: 2, name: 'Orchestrate', path: '.github/workflows/orchestrator.yml',
       status: 'completed', conclusion: 'success', html_url: 'https://github.com/x',
-      created_at: staleTime, run_started_at: staleTime }];
+      created_at: staleTime, run_started_at: staleTime,
+      triggering_actor: null, event: 'schedule' }];
     const statuses = buildAgentStatus(baseConfig, runs, [], [], []);
     const orch = statuses.find((s) => s.role === 'orchestrator');
     expect(orch?.state).toBe('sleeping');

@@ -1,6 +1,6 @@
-import { auth, signIn } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { SignInButton } from '@/components/auth/SignInButton';
 
 export default async function LandingPage() {
   const session = await auth();
@@ -13,9 +13,7 @@ export default async function LandingPage() {
         Watch your GitHub Actions CI agents work in real time — as animated
         pixel-art characters in a top-down office.
       </p>
-      <form action={async () => { 'use server'; await signIn('github'); }}>
-        <Button type="submit" size="lg">Sign in with GitHub</Button>
-      </form>
+      <SignInButton />
     </main>
   );
 }

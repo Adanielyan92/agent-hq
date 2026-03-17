@@ -49,6 +49,16 @@ export interface AgentStatus {
   conclusion: string | null;
   nextCronAt: string | null;
   currentIssue: string | null;
+  // Step-level detail (populated for working agents)
+  currentStep: string | null;       // e.g. "Run Claude agent"
+  stepCurrent: number | null;       // e.g. 3
+  stepTotal: number | null;         // e.g. 8
+  // Sub-agent / triggering info
+  triggeredBy: string | null;       // login of triggering actor, or null if human/schedule
+  triggeredByBot: boolean;          // true if triggered by another workflow/bot
+  event: string | null;             // GitHub event that triggered run
+  // Live log output (last ~10 lines, stripped of timestamps)
+  logSnippet: string | null;
 }
 
 export type ActivityItemType =

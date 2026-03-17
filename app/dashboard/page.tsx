@@ -4,7 +4,7 @@ import { spaces } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { SpaceCard } from '@/components/spaces/SpaceCard';
 
 export default async function DashboardPage() {

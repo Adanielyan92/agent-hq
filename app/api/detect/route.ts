@@ -18,7 +18,15 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
   const token = decrypt(user.github_token_enc);
-  const files = await fetchWorkflowFiles(repo, token);
+
+  let files: Awaited<ReturnType<typeof fetchWorkflowFiles>>;
+  try {
+    files = await fetchWorkflowFiles(repo, token);
+  } catch {
+    // No .github/workflows directory — return empty detections
+    return NextResponse.json(detectWorkflows([]));
+  }
+
   const ymlFiles = files.filter((f) => f.name.endsWith('.yml') || f.name.endsWith('.yaml'));
 
   const workflowMetas = await Promise.all(

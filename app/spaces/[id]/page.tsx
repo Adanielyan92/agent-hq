@@ -20,11 +20,11 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <Header />
-      <main className="max-w-5xl mx-auto p-8">
-        <div className="flex items-center justify-between mb-8">
+      <main className="max-w-4xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold font-mono">{space.name}</h1>
-            <p className="font-mono text-xs text-zinc-500 mt-1">{space.repo_full_name}</p>
+            <h1 className="text-xl font-bold font-mono text-zinc-100 tracking-tight">{space.name}</h1>
+            <p className="font-mono text-[11px] text-zinc-600 mt-0.5 tracking-wider">{space.repo_full_name}</p>
           </div>
           <ShareToggle
             spaceId={space.id}

@@ -5,7 +5,14 @@ import { users } from '@/lib/db/schema';
 import { encrypt } from '@/lib/encrypt';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [GitHub],
+  trustHost: true,
+  providers: [GitHub({
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    authorization: {
+      params: { scope: 'read:user user:email repo' },
+    },
+  })],
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === 'github' && account.access_token && user.id) {

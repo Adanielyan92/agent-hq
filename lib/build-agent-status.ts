@@ -2,7 +2,11 @@ import { CronExpressionParser } from 'cron-parser';
 import type { AgentStatus, AgentState, WorkflowConfig, AgentRoleKey,
               ActivityItem, ActivityItemType } from '@/lib/types';
 import { AGENT_ROLES } from '@/config/agent-roles';
-import type { GHWorkflowRun, GHIssue, GHPR } from '@/lib/github';
+import type { GHWorkflowRun, GHIssue, GHPR, GHRunJob } from '@/lib/github';
+
+// Run-id → job/step data, fetched separately for active runs
+export type JobsMap = Map<number, GHRunJob[]>;
+
 
 function getNextCronAt(expression: string): string | null {
   try {
@@ -18,7 +22,9 @@ export function buildAgentStatus(
   runs: GHWorkflowRun[],
   openIssues: GHIssue[],
   openPRs: GHPR[],
-  mergedPRs: GHPR[]
+  mergedPRs: GHPR[],
+  jobsMap: JobsMap = new Map(),
+  logSnippetsMap: Map<number, string | null> = new Map()
 ): AgentStatus[] {
   const roles = Object.keys(AGENT_ROLES) as AgentRoleKey[];
   const cutoff = (minutesAgo: number) =>
@@ -32,6 +38,8 @@ export function buildAgentStatus(
       return {
         role, state: 'idle', workflowFile: null, runId: null, runName: null,
         runUrl: null, startedAt: null, conclusion: null, nextCronAt: null, currentIssue: null,
+        currentStep: null, stepCurrent: null, stepTotal: null,
+        triggeredBy: null, triggeredByBot: false, event: null, logSnippet: null,
       };
     }
 
@@ -63,19 +71,51 @@ export function buildAgentStatus(
       state = 'idle';
     }
 
+    // ── Step-level detail for active runs ──────────────────────────
+    let currentStep: string | null = null;
+    let stepCurrent: number | null = null;
+    let stepTotal:   number | null = null;
+
+    if (activeRun && jobsMap.has(activeRun.id)) {
+      const jobs = jobsMap.get(activeRun.id)!;
+      const activeJob = jobs.find((j) => j.status === 'in_progress') ?? jobs[0];
+      if (activeJob) {
+        const allSteps   = activeJob.steps;
+        const activeStep = allSteps.find((s) => s.status === 'in_progress');
+        const doneSteps  = allSteps.filter((s) => s.status === 'completed').length;
+        stepTotal        = allSteps.length;
+        stepCurrent      = doneSteps + (activeStep ? 1 : 0);
+        currentStep      = activeStep?.name ?? activeJob.name;
+      }
+    }
+
+    // ── Sub-agent / triggering info ─────────────────────────────────
+    const actor          = targetRun?.triggering_actor ?? null;
+    const triggeredByBot = actor?.type === 'Bot' ||
+                           actor?.login?.includes('[bot]') === true ||
+                           targetRun?.event === 'workflow_run';
+
+    const logSnippet = activeRun ? (logSnippetsMap.get(activeRun.id) ?? null) : null;
+
     return {
       role,
       state,
       workflowFile: entry.filename,
-      runId: targetRun?.id ?? null,
-      runName: targetRun?.name ?? null,
-      runUrl: targetRun?.html_url ?? null,
-      startedAt: targetRun?.run_started_at ?? null,
-      conclusion: targetRun?.conclusion ?? null,
-      nextCronAt: state === 'sleeping' && entry.cronExpression
-        ? getNextCronAt(entry.cronExpression)
-        : null,
-      currentIssue: null, // enriched separately if needed
+      runId:        targetRun?.id ?? null,
+      runName:      targetRun?.name ?? null,
+      runUrl:       targetRun?.html_url ?? null,
+      startedAt:    targetRun?.run_started_at ?? null,
+      conclusion:   targetRun?.conclusion ?? null,
+      nextCronAt:   state === 'sleeping' && entry.cronExpression
+                      ? getNextCronAt(entry.cronExpression) : null,
+      currentIssue: null,
+      currentStep,
+      stepCurrent,
+      stepTotal,
+      triggeredBy:    actor?.login ?? null,
+      triggeredByBot,
+      event:          targetRun?.event ?? null,
+      logSnippet,
     };
   });
 }

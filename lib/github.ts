@@ -22,7 +22,28 @@ export interface GHWorkflowRun {
   html_url: string;
   created_at: string;
   run_started_at: string | null;
+  triggering_actor: { login: string; type: string } | null;
+  event: string;         // "push" | "schedule" | "workflow_run" | etc.
 }
+
+export interface GHJobStep {
+  name: string;
+  status: string;   // "queued" | "in_progress" | "completed"
+  conclusion: string | null;
+  number: number;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface GHRunJob {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  started_at: string | null;
+  steps: GHJobStep[];
+}
+
 
 export interface GHIssue {
   number: number;
@@ -83,6 +104,65 @@ export async function fetchRecentlyMergedPRs(repo: string, token: string) {
     token
   );
   return prs.filter((pr) => pr.merged_at !== null);
+}
+
+export async function fetchRunJobs(repo: string, runId: number, token: string) {
+  return ghFetch<{ jobs: GHRunJob[] }>(
+    `/repos/${repo}/actions/runs/${runId}/jobs`,
+    token
+  );
+}
+
+/**
+ * Fetches the last ~4KB of job logs for an in-progress run.
+ * Returns a cleaned snippet (timestamps/markers stripped) or null on failure.
+ */
+export async function fetchJobLogsSnippet(
+  repo: string,
+  jobId: number,
+  token: string
+): Promise<string | null> {
+  try {
+    // Step 1: GitHub redirects us to a signed blob URL
+    const redirectRes = await fetch(`${BASE}/repos/${repo}/actions/jobs/${jobId}/logs`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      redirect: 'manual',
+      cache: 'no-store',
+    });
+
+    const logUrl = redirectRes.headers.get('location');
+    if (!logUrl) return null;
+
+    // Step 2: Fetch only the tail of the log (avoids downloading megabytes)
+    const logRes = await fetch(logUrl, {
+      headers: { Range: 'bytes=-4096' },
+      cache: 'no-store',
+    });
+    if (!logRes.ok && logRes.status !== 206) return null;
+
+    const raw = await logRes.text();
+
+    // Step 3: Strip GitHub Actions log format:
+    // "2024-01-15T10:23:45.1234567Z ##[group]Step name\n"
+    const lines = raw
+      .split('\n')
+      .map(line =>
+        line
+          .replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z /, '')
+          .replace(/^##\[(?:group|endgroup|section|endsection|command|debug|warning|error|notice|add-matcher|remove-matcher)\]/, '')
+          .trim()
+      )
+      .filter(line => line.length > 1);
+
+    const snippet = lines.slice(-10).join('\n');
+    return snippet || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchWorkflowFiles(repo: string, token: string) {
