@@ -1,0 +1,112 @@
+import { CronExpressionParser } from 'cron-parser';
+import type { AgentStatus, AgentState, WorkflowConfig, AgentRoleKey,
+              ActivityItem, ActivityItemType } from '@/lib/types';
+import { AGENT_ROLES } from '@/config/agent-roles';
+import type { GHWorkflowRun, GHIssue, GHPR } from '@/lib/github';
+
+function getNextCronAt(expression: string): string | null {
+  try {
+    const interval = CronExpressionParser.parse(expression);
+    return interval.next().toISOString();
+  } catch {
+    return null;
+  }
+}
+
+export function buildAgentStatus(
+  config: WorkflowConfig,
+  runs: GHWorkflowRun[],
+  openIssues: GHIssue[],
+  openPRs: GHPR[],
+  mergedPRs: GHPR[]
+): AgentStatus[] {
+  const roles = Object.keys(AGENT_ROLES) as AgentRoleKey[];
+  const cutoff = (minutesAgo: number) =>
+    new Date(Date.now() - minutesAgo * 60 * 1000);
+
+  return roles.map((role) => {
+    const entry = config[role];
+    const idleAfter = AGENT_ROLES[role].idleAfterMinutes;
+
+    if (!entry) {
+      return {
+        role, state: 'idle', workflowFile: null, runId: null, runName: null,
+        runUrl: null, startedAt: null, conclusion: null, nextCronAt: null, currentIssue: null,
+      };
+    }
+
+    // Find runs for this role's workflow file
+    const roleRuns = runs
+      .filter((r) => r.path.endsWith(entry.filename))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    const activeRun = roleRuns.find((r) => r.status === 'in_progress');
+    const queuedRun = roleRuns.find((r) => r.status === 'queued');
+    const recentRun = roleRuns.find(
+      (r) => r.status === 'completed' && new Date(r.created_at) > cutoff(idleAfter)
+    );
+
+    let state: AgentState;
+    const targetRun = activeRun ?? queuedRun ?? recentRun;
+
+    if (activeRun) {
+      state = 'working';
+    } else if (queuedRun) {
+      state = 'queued';
+    } else if (recentRun?.conclusion === 'success') {
+      state = 'success';
+    } else if (recentRun?.conclusion === 'failure') {
+      state = 'failed';
+    } else if (entry.cronExpression) {
+      state = 'sleeping';
+    } else {
+      state = 'idle';
+    }
+
+    return {
+      role,
+      state,
+      workflowFile: entry.filename,
+      runId: targetRun?.id ?? null,
+      runName: targetRun?.name ?? null,
+      runUrl: targetRun?.html_url ?? null,
+      startedAt: targetRun?.run_started_at ?? null,
+      conclusion: targetRun?.conclusion ?? null,
+      nextCronAt: state === 'sleeping' && entry.cronExpression
+        ? getNextCronAt(entry.cronExpression)
+        : null,
+      currentIssue: null, // enriched separately if needed
+    };
+  });
+}
+
+export function buildActivityFeed(
+  runs: GHWorkflowRun[],
+  openPRs: GHPR[],
+  mergedPRs: GHPR[],
+  openIssues: GHIssue[]
+): ActivityItem[] {
+  const items: ActivityItem[] = [];
+
+  for (const run of runs.filter((r) => r.status === 'completed').slice(0, 10)) {
+    const type: ActivityItemType = run.conclusion === 'success' ? 'run_success' : 'run_failed';
+    items.push({ type, label: run.name, url: run.html_url, timestamp: run.created_at });
+  }
+  for (const pr of openPRs) {
+    items.push({ type: 'pr_opened', label: `#${pr.number} ${pr.title}`,
+      url: pr.html_url, timestamp: pr.created_at });
+  }
+  for (const pr of mergedPRs) {
+    items.push({ type: 'pr_merged', label: `#${pr.number} merged`,
+      url: pr.html_url, timestamp: pr.merged_at! });
+  }
+  for (const issue of openIssues) {
+    items.push({ type: 'issue_ready', label: `#${issue.number} ${issue.title}`,
+      url: issue.html_url, timestamp: issue.created_at });
+  }
+
+  return items
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .filter((item, idx, arr) => arr.findIndex((i) => i.url === item.url) === idx)
+    .slice(0, 10);
+}
