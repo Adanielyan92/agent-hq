@@ -255,9 +255,13 @@ export class OfficeState {
       ch.state = CharacterState.WALK;
       ch.frame = 0;
       ch.frameTimer = 0;
-    } else {
+    } else if (ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
+      // Already at desk — sit down
       ch.state = CharacterState.TYPE;
       ch.dir = seat.facingDir;
+    } else {
+      // Path temporarily blocked — set IDLE so the game loop retries every frame
+      ch.state = CharacterState.IDLE;
     }
   }
 

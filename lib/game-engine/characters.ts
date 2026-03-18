@@ -140,18 +140,22 @@ export function updateCharacter(
         }
         const seat = seats.get(ch.seatId);
         if (seat) {
-          const path = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles);
-          if (path.length > 0) {
-            ch.path = path;
-            ch.moveProgress = 0;
-            ch.state = CharacterState.WALK;
-            ch.frame = 0;
-            ch.frameTimer = 0;
-          } else {
+          if (ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
+            // Already at desk — sit down
             ch.state = CharacterState.TYPE;
             ch.dir = seat.facingDir;
             ch.frame = 0;
             ch.frameTimer = 0;
+          } else {
+            const path = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles);
+            if (path.length > 0) {
+              ch.path = path;
+              ch.moveProgress = 0;
+              ch.state = CharacterState.WALK;
+              ch.frame = 0;
+              ch.frameTimer = 0;
+            }
+            // Path temporarily blocked — stay in IDLE, retry next frame
           }
         }
         break;
