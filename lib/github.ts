@@ -122,47 +122,81 @@ export async function fetchJobLogsSnippet(
   jobId: number,
   token: string
 ): Promise<string | null> {
+  const apiUrl = `${BASE}/repos/${repo}/actions/jobs/${jobId}/logs`;
+  const ghHeaders = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
   try {
-    // Step 1: GitHub redirects us to a signed blob URL
-    const redirectRes = await fetch(`${BASE}/repos/${repo}/actions/jobs/${jobId}/logs`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+    // Strategy 1: redirect:'manual' → get Location header → Range request
+    // (works in Node.js 18+ where redirect:'manual' exposes the 302 Location)
+    let signedUrl: string | null = null;
+
+    const probeRes = await fetch(apiUrl, {
+      headers: ghHeaders,
       redirect: 'manual',
       cache: 'no-store',
     });
 
-    const logUrl = redirectRes.headers.get('location');
-    if (!logUrl) return null;
+    if (probeRes.status >= 300 && probeRes.status < 400) {
+      signedUrl = probeRes.headers.get('location');
+    }
 
-    // Step 2: Fetch only the tail of the log (avoids downloading megabytes)
-    const logRes = await fetch(logUrl, {
-      headers: { Range: 'bytes=-4096' },
+    if (signedUrl) {
+      // Only fetch the last 4 KB of the log file
+      const logRes = await fetch(signedUrl, {
+        headers: { Range: 'bytes=-4096' },
+        cache: 'no-store',
+      });
+      if (logRes.ok || logRes.status === 206) {
+        return cleanLogText(await logRes.text());
+      }
+    }
+
+    // Strategy 2: follow redirect; response.url holds the signed URL,
+    // then do a fresh Range request to that signed URL.
+    const followRes = await fetch(apiUrl, {
+      headers: ghHeaders,
+      redirect: 'follow',
       cache: 'no-store',
     });
-    if (!logRes.ok && logRes.status !== 206) return null;
+    if (!followRes.ok) return null;
 
-    const raw = await logRes.text();
+    // If the redirect was followed, response.url is the signed blob URL.
+    // Consume body to free the socket, then Range-fetch the same URL.
+    await followRes.body?.cancel();
+    const blobUrl = followRes.url;
 
-    // Step 3: Strip GitHub Actions log format:
-    // "2024-01-15T10:23:45.1234567Z ##[group]Step name\n"
-    const lines = raw
-      .split('\n')
-      .map(line =>
-        line
-          .replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z /, '')
-          .replace(/^##\[(?:group|endgroup|section|endsection|command|debug|warning|error|notice|add-matcher|remove-matcher)\]/, '')
-          .trim()
-      )
-      .filter(line => line.length > 1);
+    if (blobUrl && blobUrl !== apiUrl) {
+      const rangeRes = await fetch(blobUrl, {
+        headers: { Range: 'bytes=-4096' },
+        cache: 'no-store',
+      });
+      if (rangeRes.ok || rangeRes.status === 206) {
+        return cleanLogText(await rangeRes.text());
+      }
+    }
 
-    const snippet = lines.slice(-10).join('\n');
-    return snippet || null;
+    return null;
   } catch {
     return null;
   }
+}
+
+function cleanLogText(raw: string): string | null {
+  const lines = raw
+    .split('\n')
+    .map(line =>
+      line
+        .replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z /, '')
+        .replace(/^##\[(?:group|endgroup|section|endsection|command|debug|warning|error|notice|add-matcher|remove-matcher)\]/, '')
+        .trim()
+    )
+    .filter(line => line.length > 1);
+
+  return lines.slice(-10).join('\n') || null;
 }
 
 export async function fetchWorkflowFiles(repo: string, token: string) {

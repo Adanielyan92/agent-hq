@@ -20,7 +20,7 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <Header />
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold font-mono text-zinc-100 tracking-tight">{space.name}</h1>

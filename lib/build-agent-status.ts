@@ -1,5 +1,5 @@
 import { CronExpressionParser } from 'cron-parser';
-import type { AgentStatus, AgentState, WorkflowConfig, AgentRoleKey,
+import type { AgentStatus, AgentState, AgentJobStep, WorkflowConfig, AgentRoleKey,
               ActivityItem, ActivityItemType } from '@/lib/types';
 import { AGENT_ROLES } from '@/config/agent-roles';
 import type { GHWorkflowRun, GHIssue, GHPR, GHRunJob } from '@/lib/github';
@@ -38,7 +38,7 @@ export function buildAgentStatus(
       return {
         role, state: 'idle', workflowFile: null, runId: null, runName: null,
         runUrl: null, startedAt: null, conclusion: null, nextCronAt: null, currentIssue: null,
-        currentStep: null, stepCurrent: null, stepTotal: null,
+        currentStep: null, stepCurrent: null, stepTotal: null, jobSteps: [],
         triggeredBy: null, triggeredByBot: false, event: null, logSnippet: null,
       };
     }
@@ -75,6 +75,7 @@ export function buildAgentStatus(
     let currentStep: string | null = null;
     let stepCurrent: number | null = null;
     let stepTotal:   number | null = null;
+    let jobSteps: AgentJobStep[]   = [];
 
     if (activeRun && jobsMap.has(activeRun.id)) {
       const jobs = jobsMap.get(activeRun.id)!;
@@ -86,6 +87,13 @@ export function buildAgentStatus(
         stepTotal        = allSteps.length;
         stepCurrent      = doneSteps + (activeStep ? 1 : 0);
         currentStep      = activeStep?.name ?? activeJob.name;
+        jobSteps         = allSteps.map((s) => ({
+          name:        s.name,
+          status:      s.status as AgentJobStep['status'],
+          conclusion:  s.conclusion,
+          startedAt:   s.started_at,
+          completedAt: s.completed_at,
+        }));
       }
     }
 
@@ -112,6 +120,7 @@ export function buildAgentStatus(
       currentStep,
       stepCurrent,
       stepTotal,
+      jobSteps,
       triggeredBy:    actor?.login ?? null,
       triggeredByBot,
       event:          targetRun?.event ?? null,
@@ -128,7 +137,11 @@ export function buildActivityFeed(
 ): ActivityItem[] {
   const items: ActivityItem[] = [];
 
-  for (const run of runs.filter((r) => r.status === 'completed').slice(0, 10)) {
+  for (const run of runs.filter((r) =>
+    r.status === 'completed' &&
+    r.conclusion !== 'skipped' &&
+    r.conclusion !== 'cancelled'
+  ).slice(0, 10)) {
     const type: ActivityItemType = run.conclusion === 'success' ? 'run_success' : 'run_failed';
     items.push({ type, label: run.name, url: run.html_url, timestamp: run.created_at });
   }

@@ -1,0 +1,89 @@
+import { TileType } from './types';
+
+export function isWalkable(
+  col: number,
+  row: number,
+  tileMap: TileType[][],
+  blockedTiles: Set<string>,
+): boolean {
+  const rows = tileMap.length;
+  const cols = rows > 0 ? tileMap[0].length : 0;
+  if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+  const t = tileMap[row][col];
+  if (t === TileType.WALL || t === TileType.VOID) return false;
+  if (blockedTiles.has(`${col},${row}`)) return false;
+  return true;
+}
+
+export function getWalkableTiles(
+  tileMap: TileType[][],
+  blockedTiles: Set<string>,
+): Array<{ col: number; row: number }> {
+  const result: Array<{ col: number; row: number }> = [];
+  for (let r = 0; r < tileMap.length; r++) {
+    for (let c = 0; c < tileMap[r].length; c++) {
+      if (isWalkable(c, r, tileMap, blockedTiles)) {
+        result.push({ col: c, row: r });
+      }
+    }
+  }
+  return result;
+}
+
+/** BFS pathfinding — returns path excluding start, including end */
+export function findPath(
+  startCol: number,
+  startRow: number,
+  endCol: number,
+  endRow: number,
+  tileMap: TileType[][],
+  blockedTiles: Set<string>,
+): Array<{ col: number; row: number }> {
+  if (startCol === endCol && startRow === endRow) return [];
+
+  const key = (c: number, r: number) => `${c},${r}`;
+  const startKey = key(startCol, startRow);
+  const endKey = key(endCol, endRow);
+
+  if (!isWalkable(endCol, endRow, tileMap, blockedTiles)) return [];
+
+  const visited = new Set<string>([startKey]);
+  const parent = new Map<string, string>();
+  const queue: Array<{ col: number; row: number }> = [{ col: startCol, row: startRow }];
+
+  const dirs = [
+    { dc: 0, dr: -1 },
+    { dc: 0, dr: 1 },
+    { dc: -1, dr: 0 },
+    { dc: 1, dr: 0 },
+  ];
+
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    const currKey = key(curr.col, curr.row);
+
+    if (currKey === endKey) {
+      const path: Array<{ col: number; row: number }> = [];
+      let k = endKey;
+      while (k !== startKey) {
+        const [c, r] = k.split(',').map(Number);
+        path.unshift({ col: c, row: r });
+        k = parent.get(k)!;
+      }
+      return path;
+    }
+
+    for (const d of dirs) {
+      const nc = curr.col + d.dc;
+      const nr = curr.row + d.dr;
+      const nk = key(nc, nr);
+      if (visited.has(nk)) continue;
+      if (!isWalkable(nc, nr, tileMap, blockedTiles)) continue;
+      visited.add(nk);
+      parent.set(nk, currKey);
+      queue.push({ col: nc, row: nr });
+    }
+  }
+
+  return [];
+}

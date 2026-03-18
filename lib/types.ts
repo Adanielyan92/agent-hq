@@ -38,6 +38,15 @@ export type AgentState =
   | 'idle'
   | 'sleeping';
 
+/** A single GitHub Actions job step, simplified for the UI */
+export interface AgentJobStep {
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed';
+  conclusion: string | null;  // "success" | "failure" | "skipped" | null
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 export interface AgentStatus {
   role: AgentRoleKey;
   state: AgentState;
@@ -53,6 +62,8 @@ export interface AgentStatus {
   currentStep: string | null;       // e.g. "Run Claude agent"
   stepCurrent: number | null;       // e.g. 3
   stepTotal: number | null;         // e.g. 8
+  // Full step list for the active job (timeline display)
+  jobSteps: AgentJobStep[];
   // Sub-agent / triggering info
   triggeredBy: string | null;       // login of triggering actor, or null if human/schedule
   triggeredByBot: boolean;          // true if triggered by another workflow/bot

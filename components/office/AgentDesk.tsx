@@ -143,7 +143,7 @@ export function AgentDesk({ agent, visitor, isAway }: Props) {
         <div className={`desk-visitor ${visitor.fromRight ? 'visitor-from-right' : 'visitor-from-left'}`}>
           <AgentSprite
             sprite={visitorConfig.sprite}
-            state="working"
+            state="queued"
             color={visitorColor}
           />
           <span className="visitor-label">{visitor.label}</span>
