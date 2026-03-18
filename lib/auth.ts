@@ -15,11 +15,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   })],
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === 'github' && account.access_token && user.id) {
+      if (account?.provider === 'github' && account.access_token) {
+        // Use providerAccountId — stable GitHub numeric ID.
+        // user.id can be a random UUID in NextAuth v5 beta and changes per sign-in.
+        const githubId = account.providerAccountId;
         await db
           .insert(users)
           .values({
-            id:               user.id,
+            id:               githubId,
             username:         user.name ?? user.email ?? 'unknown',
             avatar_url:       user.image ?? null,
             github_token_enc: encrypt(account.access_token),
@@ -35,9 +38,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true;
     },
-    async jwt({ token, user }) {
-      // Ensure token.sub is always the GitHub profile ID, not a generated UUID
-      if (user?.id) token.sub = user.id;
+    async jwt({ token, account }) {
+      // Persist the stable GitHub ID into the JWT on sign-in.
+      // account is only present on the initial sign-in call.
+      if (account?.providerAccountId) {
+        token.sub = account.providerAccountId;
+      }
       return token;
     },
     async session({ session, token }) {
