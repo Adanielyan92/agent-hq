@@ -199,9 +199,10 @@ export class OfficeState {
 
   private withOwnSeatUnblocked<T>(ch: Character, fn: () => T): T {
     const key = this.ownSeatKey(ch);
+    const wasBlocked = key ? this.blockedTiles.has(key) : false;
     if (key) this.blockedTiles.delete(key);
     const result = fn();
-    if (key) this.blockedTiles.add(key);
+    if (key && wasBlocked) this.blockedTiles.add(key);
     return result;
   }
 

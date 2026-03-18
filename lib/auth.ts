@@ -26,10 +26,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           })
           .onConflictDoUpdate({
             target: users.id,
-            set: { github_token_enc: encrypt(account.access_token) },
+            set: {
+              github_token_enc: encrypt(account.access_token),
+              username: user.name ?? user.email ?? 'unknown',
+              avatar_url: user.image ?? null,
+            },
           });
       }
       return true;
+    },
+    async jwt({ token, user }) {
+      // Ensure token.sub is always the GitHub profile ID, not a generated UUID
+      if (user?.id) token.sub = user.id;
+      return token;
     },
     async session({ session, token }) {
       if (token.sub) session.user.id = token.sub;

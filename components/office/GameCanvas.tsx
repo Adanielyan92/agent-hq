@@ -63,6 +63,10 @@ export function GameCanvas({ agents }: Props) {
     const state = stateRef.current;
     if (!state) return;
 
+    // Skip sync when no agent data has arrived yet — agents start at their
+    // desks (from addAgent) and should stay there until we know their real status.
+    if (agents.length === 0) return;
+
     const byRole = new Map(agents.map((a) => [a.role, a]));
     const isFirstSync = Object.keys(prevActiveRef.current).length === 0;
 
