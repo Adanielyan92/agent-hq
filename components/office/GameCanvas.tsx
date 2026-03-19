@@ -46,6 +46,10 @@ export function GameCanvas({ agents }: Props) {
 
       ROLES.forEach((role, i) => {
         state.addAgent(i, i, role.replace('_', ' '));
+        // Start all agents at lounge — first API sync will walk active ones to desks.
+        // This avoids the visual blink (all at desks → idle ones teleport to lounge).
+        state.setAgentActive(i, false);
+        state.sendToLounge(i);
       });
 
       setLoading(false);
@@ -63,8 +67,8 @@ export function GameCanvas({ agents }: Props) {
     const state = stateRef.current;
     if (!state) return;
 
-    // Skip sync when no agent data has arrived yet — agents start at their
-    // desks (from addAgent) and should stay there until we know their real status.
+    // Skip sync when no agent data has arrived yet — agents start at the
+    // lounge and should stay there until we know their real status.
     if (agents.length === 0) return;
 
     const byRole = new Map(agents.map((a) => [a.role, a]));
@@ -72,8 +76,14 @@ export function GameCanvas({ agents }: Props) {
 
     ROLES.forEach((role, i) => {
       const agent = byRole.get(role);
-      const isActive = agent?.state === 'working' || agent?.state === 'queued';
-      const tool = agent?.currentStep ?? null;
+      // Agents stay at desk while working, queued, OR recently completed (success/failed).
+      // An agent who just finished a task stays at their desk reviewing — they don't
+      // immediately run to the break room. They go to lounge only when state becomes
+      // 'idle' or 'sleeping' (after the idleAfterMinutes window expires).
+      const isActive = agent?.state === 'working' || agent?.state === 'queued'
+                    || agent?.state === 'success' || agent?.state === 'failed';
+      // Success → reading/reviewing pose; others → current step or typing
+      const tool = agent?.state === 'success' ? 'Read' : (agent?.currentStep ?? null);
       const wasActive = prevActiveRef.current[role] ?? false;
 
       state.setAgentActive(i, isActive, tool);
@@ -90,7 +100,8 @@ export function GameCanvas({ agents }: Props) {
     // Update previous active state tracking
     ROLES.forEach((role) => {
       const agent = byRole.get(role);
-      prevActiveRef.current[role] = agent?.state === 'working' || agent?.state === 'queued';
+      prevActiveRef.current[role] = agent?.state === 'working' || agent?.state === 'queued'
+                                 || agent?.state === 'success' || agent?.state === 'failed';
     });
   }, [agents, loading, error]);
 

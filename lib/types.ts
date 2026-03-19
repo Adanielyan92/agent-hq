@@ -17,6 +17,8 @@ export interface AgentRoleConfig {
 
 export interface WorkflowConfigEntry {
   filename: string;
+  /** Additional workflow files that also map to this role (e.g. claude.yml serves reviewer + fixer) */
+  additionalFilenames?: string[];
   cronExpression?: string;
 }
 

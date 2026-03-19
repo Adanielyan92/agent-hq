@@ -43,9 +43,10 @@ export function buildAgentStatus(
       };
     }
 
-    // Find runs for this role's workflow file
+    // Find runs for this role's workflow file(s)
+    const allFilenames = [entry.filename, ...(entry.additionalFilenames ?? [])];
     const roleRuns = runs
-      .filter((r) => r.path.endsWith(entry.filename))
+      .filter((r) => allFilenames.some((fn) => r.path.endsWith(fn)))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const activeRun = roleRuns.find((r) => r.status === 'in_progress');
