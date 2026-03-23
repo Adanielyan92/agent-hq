@@ -1,58 +1,45 @@
-import type { AGENT_ROLES } from '@/config/agent-roles';
+export type AgentKind = 'agent' | 'workflow';
 
-export type AgentRoleKey = keyof typeof AGENT_ROLES;
-
-export interface AgentRoleConfig {
+export interface WorkflowEntry {
+  filename: string;
+  kind: AgentKind;
   label: string;
-  description: string;
-  sprite: string;
-  color: string;
-  idleAfterMinutes: number;
-  autoDetect: {
-    filenamePatterns: string[];
-    triggerTypes: string[];
-    nameKeywords: string[];
-  };
+  confidence: number;
+  signals: string[];
+  cronExpression?: string;
+  userLabel?: string;
+  userKind?: AgentKind;
+  hidden?: boolean;
 }
 
-export interface WorkflowConfigEntry {
+export type ClassifiedWorkflow = Omit<WorkflowEntry, 'userLabel' | 'userKind' | 'hidden'>;
+
+/** Old format for lazy migration */
+export interface LegacyWorkflowConfigEntry {
   filename: string;
-  /** Additional workflow files that also map to this role (e.g. claude.yml serves reviewer + fixer) */
   additionalFilenames?: string[];
   cronExpression?: string;
 }
-
-export type WorkflowConfig = Record<AgentRoleKey, WorkflowConfigEntry | null>;
-
-export interface DetectionResult {
-  role: AgentRoleKey;
-  matched: WorkflowConfigEntry | null;
-  confidence: 'confident' | 'low' | 'undetected';
-  score: number;
-  alternatives: WorkflowConfigEntry[];
-}
+export type LegacyWorkflowConfig = Record<string, LegacyWorkflowConfigEntry | null>;
 
 export type AgentState =
-  | 'working'
-  | 'queued'
-  | 'success'
-  | 'failed'
-  | 'idle'
-  | 'sleeping';
+  | 'working' | 'queued' | 'success' | 'failed'
+  | 'idle' | 'coffee' | 'sleeping';
 
-/** A single GitHub Actions job step, simplified for the UI */
 export interface AgentJobStep {
   name: string;
   status: 'queued' | 'in_progress' | 'completed';
-  conclusion: string | null;  // "success" | "failure" | "skipped" | null
+  conclusion: string | null;
   startedAt: string | null;
   completedAt: string | null;
 }
 
 export interface AgentStatus {
-  role: AgentRoleKey;
+  id: string;
+  label: string;
+  kind: AgentKind;
   state: AgentState;
-  workflowFile: string | null;
+  workflowFile: string;
   runId: number | null;
   runName: string | null;
   runUrl: string | null;
@@ -60,26 +47,18 @@ export interface AgentStatus {
   conclusion: string | null;
   nextCronAt: string | null;
   currentIssue: string | null;
-  // Step-level detail (populated for working agents)
-  currentStep: string | null;       // e.g. "Run Claude agent"
-  stepCurrent: number | null;       // e.g. 3
-  stepTotal: number | null;         // e.g. 8
-  // Full step list for the active job (timeline display)
+  currentStep: string | null;
+  stepCurrent: number | null;
+  stepTotal: number | null;
   jobSteps: AgentJobStep[];
-  // Sub-agent / triggering info
-  triggeredBy: string | null;       // login of triggering actor, or null if human/schedule
-  triggeredByBot: boolean;          // true if triggered by another workflow/bot
-  event: string | null;             // GitHub event that triggered run
-  // Live log output (last ~10 lines, stripped of timestamps)
+  triggeredBy: string | null;
+  triggeredByBot: boolean;
+  event: string | null;
   logSnippet: string | null;
 }
 
 export type ActivityItemType =
-  | 'run_success'
-  | 'run_failed'
-  | 'pr_opened'
-  | 'pr_merged'
-  | 'issue_ready';
+  | 'run_success' | 'run_failed' | 'pr_opened' | 'pr_merged' | 'issue_ready';
 
 export interface ActivityItem {
   type: ActivityItemType;
