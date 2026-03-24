@@ -105,8 +105,6 @@ function drawFurniture(
 
 // ── Character rendering ────────────────────────────────────────
 
-const ORCH_SCALE = 1.35; // orchestrator renders bigger than others
-
 function drawCharacter(
   ctx: CanvasRenderingContext2D,
   ch: Character,
@@ -124,9 +122,8 @@ function drawCharacter(
 
   const sx = frameCol * CHAR_FRAME_W;
   const sy = dirRow * CHAR_FRAME_H;
-  const scale = ch.roleName === 'orchestrator' ? ORCH_SCALE : 1.0;
-  const dw = CHAR_FRAME_W * zoom * scale;
-  const dh = CHAR_FRAME_H * zoom * scale;
+  const dw = CHAR_FRAME_W * zoom;
+  const dh = CHAR_FRAME_H * zoom;
 
   const offsetY_sit = sittingOffset(ch);
   // Anchor at bottom-center
@@ -155,9 +152,8 @@ function drawNameTag(
   isActive: boolean,
 ): void {
   if (!ch.roleName) return;
-  const scale = ch.roleName === 'orchestrator' ? ORCH_SCALE : 1.0;
-  const dw = CHAR_FRAME_W * zoom * scale;
-  const dh = CHAR_FRAME_H * zoom * scale;
+  const dw = CHAR_FRAME_W * zoom;
+  const dh = CHAR_FRAME_H * zoom;
   const offsetY_sit = sittingOffset(ch);
   const drawX = Math.round(offsetX + ch.x * zoom - dw / 2);
   const drawY = Math.round(offsetY + (ch.y + offsetY_sit) * zoom - dh);
@@ -206,6 +202,35 @@ function drawNameTag(
 
     ctx.fillStyle = 'rgba(120, 200, 255, 0.9)';
     ctx.fillText(toolLabel, bubbleX + tPadX, bubbleY + bubbleH - tPadY);
+  }
+
+  // Lounge status bubble — coffee or zzz
+  if (!isActive && ch.state === CharacterState.LOUNGE && ch.loungeMode !== 'idle') {
+    const emoji = ch.loungeMode === 'coffee' ? '☕' : '💤';
+    const emojiFontSize = Math.max(8, 7 * zoom);
+    ctx.font = `${Math.round(emojiFontSize)}px serif`;
+    const emojiW = ctx.measureText(emoji).width;
+    const ePadX = 2 * (zoom / 2);
+    const ePadY = 1.5 * (zoom / 2);
+    const bubbleW = emojiW + ePadX * 2;
+    const bubbleH = emojiFontSize + ePadY * 2;
+    const bubbleX = drawX + dw / 2 - bubbleW / 2;
+    // Float above the name tag
+    const bubbleY = tagY - bubbleH - 1 * zoom;
+
+    // Subtle floating animation via sin wave
+    const floatOffset = Math.sin(Date.now() / 800 + ch.id * 2) * zoom * 0.8;
+
+    ctx.fillStyle = ch.loungeMode === 'coffee'
+      ? 'rgba(80, 50, 20, 0.80)'
+      : 'rgba(30, 30, 60, 0.80)';
+    ctx.beginPath();
+    ctx.roundRect(bubbleX, bubbleY + floatOffset, bubbleW, bubbleH, bubbleH / 2);
+    ctx.fill();
+
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, bubbleX + ePadX, bubbleY + floatOffset + bubbleH / 2);
+    ctx.textBaseline = 'bottom'; // restore
   }
 }
 

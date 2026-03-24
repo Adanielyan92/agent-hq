@@ -225,6 +225,16 @@ export class OfficeState {
     this.characters.set(id, ch);
   }
 
+  removeAgent(id: number): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    if (ch.seatId) {
+      const seat = this.seats.get(ch.seatId);
+      if (seat) seat.assigned = false;
+    }
+    this.characters.delete(id);
+  }
+
   setAgentActive(id: number, active: boolean, tool?: string | null): void {
     const ch = this.characters.get(id);
     if (!ch) return;
@@ -263,6 +273,12 @@ export class OfficeState {
       // Path temporarily blocked — set IDLE so the game loop retries every frame
       ch.state = CharacterState.IDLE;
     }
+  }
+
+  /** Set the loungeMode for a character (idle / coffee / sleeping) */
+  setLoungeMode(id: number, mode: import('./types').LoungeMode): void {
+    const ch = this.characters.get(id);
+    if (ch) ch.loungeMode = mode;
   }
 
   /** Teleport an idle agent directly onto a lounge seat — no walking. */

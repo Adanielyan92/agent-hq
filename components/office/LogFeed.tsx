@@ -1,17 +1,8 @@
 'use client';
 import { useMemo, useEffect, useRef } from 'react';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
-import type { AgentStatus, AgentJobStep, AgentRoleKey } from '@/lib/types';
-import { AGENT_ROLES } from '@/config/agent-roles';
-
-const ROLE_COLORS: Record<string, string> = {
-  orchestrator: '#a78bfa',
-  implementer:  '#60a5fa',
-  reviewer:     '#fbbf24',
-  ci_runner:    '#34d399',
-  board_sync:   '#94a3b8',
-  pipeline:     '#f472b6',
-};
+import type { AgentStatus, AgentJobStep } from '@/lib/types';
+import { colorForWorkflow } from '@/lib/workflow-colors';
 
 // ── Color a raw log line ──────────────────────────────────────────────
 function lineColor(text: string): string {
@@ -99,8 +90,8 @@ function LogLines({ snippet }: { snippet: string }) {
 
 // ── Single agent panel ────────────────────────────────────────────────
 function AgentLogPanel({ agent }: { agent: AgentStatus }) {
-  const color    = ROLE_COLORS[agent.role] ?? '#94a3b8';
-  const label    = AGENT_ROLES[agent.role]?.label ?? agent.role;
+  const color    = colorForWorkflow(agent.workflowFile);
+  const label    = agent.label;
   const isActive = agent.state === 'working';
 
   // Duration the job has been running
@@ -196,10 +187,10 @@ export function LogFeed({ agents }: { agents: AgentStatus[] }) {
         <div className="log-feed-indicators">
           {visibleAgents.map(a => (
             <span
-              key={a.role}
+              key={a.id}
               className={`log-indicator ${a.state === 'working' ? 'log-indicator-live' : ''}`}
-              style={{ background: ROLE_COLORS[a.role] ?? '#374151' }}
-              title={AGENT_ROLES[a.role]?.label ?? a.role}
+              style={{ background: colorForWorkflow(a.workflowFile) }}
+              title={a.label}
             />
           ))}
         </div>
@@ -207,7 +198,7 @@ export function LogFeed({ agents }: { agents: AgentStatus[] }) {
 
       <div className="log-feed-grid">
         {visibleAgents.map(agent => (
-          <AgentLogPanel key={agent.role} agent={agent} />
+          <AgentLogPanel key={agent.id} agent={agent} />
         ))}
       </div>
     </div>
