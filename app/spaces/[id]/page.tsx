@@ -6,6 +6,8 @@ import { notFound, redirect } from 'next/navigation';
 import { OfficeFloor } from '@/components/office/OfficeFloor';
 import { ShareToggle } from '@/components/layout/ShareBadge';
 import { Header } from '@/components/layout/Header';
+import Link from 'next/link';
+import { SettingsIcon } from 'lucide-react';
 
 export default async function SpacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,11 +28,18 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
             <h1 className="text-xl font-bold font-mono text-zinc-100 tracking-tight">{space.name}</h1>
             <p className="font-mono text-[11px] text-zinc-600 mt-0.5 tracking-wider">{space.repo_full_name}</p>
           </div>
-          <ShareToggle
-            spaceId={space.id}
-            shareEnabled={space.share_enabled}
-            shareToken={space.share_token}
-          />
+          <div className="flex items-center gap-2">
+            <Link href={`/spaces/${space.id}/settings`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-mono text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors">
+              <SettingsIcon className="size-3.5" />
+              Settings
+            </Link>
+            <ShareToggle
+              spaceId={space.id}
+              shareEnabled={space.share_enabled}
+              shareToken={space.share_token}
+            />
+          </div>
         </div>
         <OfficeFloor spaceId={space.id} />
       </main>

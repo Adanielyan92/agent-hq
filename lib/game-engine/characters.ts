@@ -79,6 +79,7 @@ export function createCharacter(
     seatId,
     seatTimer: 0,
     roleName,
+    loungeMode: 'idle',
   };
 }
 

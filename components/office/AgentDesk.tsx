@@ -1,18 +1,9 @@
 'use client';
 import { useMemo } from 'react';
-import type { AgentStatus, AgentRoleKey } from '@/lib/types';
-import { AGENT_ROLES } from '@/config/agent-roles';
+import type { AgentStatus } from '@/lib/types';
+import { colorForWorkflow } from '@/lib/workflow-colors';
 import { AgentSprite } from './AgentSprite';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-
-const ROLE_COLORS: Record<string, string> = {
-  orchestrator: '#a78bfa',
-  implementer:  '#60a5fa',
-  reviewer:     '#fbbf24',
-  ci_runner:    '#34d399',
-  board_sync:   '#94a3b8',
-  pipeline:     '#f472b6',
-};
 
 const MONITOR_CONFIGS: Record<
   AgentStatus['state'],
@@ -22,6 +13,7 @@ const MONITOR_CONFIGS: Record<
   queued:   { screen: '#2a1505', glow: '#fb923c' },
   success:  { screen: '#052e16', glow: '#4ade80' },
   failed:   { screen: '#2d0707', glow: '#f87171' },
+  coffee:   { screen: '#1a1005', glow: '#f59e0b' },
   sleeping: { screen: '#1e1b4b', glow: '#818cf8' },
   idle:     { screen: '#09090b', glow: 'transparent' },
 };
@@ -31,6 +23,7 @@ const STATE_LABELS: Record<AgentStatus['state'], string> = {
   queued:   'Queued',
   success:  'Done',
   failed:   'Failed',
+  coffee:   'On Break',
   sleeping: 'Sleeping',
   idle:     'Idle',
 };
@@ -83,7 +76,7 @@ function parseLastAction(
 
 // ── Visitor = another agent who is currently at this desk ───────────
 export interface DeskVisitor {
-  role: AgentRoleKey;
+  role: string;
   label: string;  // "peer review" | "delegating task" | "running checks"
   fromRight: boolean; // which side they walked in from
 }
@@ -95,8 +88,7 @@ interface Props {
 }
 
 export function AgentDesk({ agent, visitor, isAway }: Props) {
-  const role    = AGENT_ROLES[agent.role];
-  const color   = ROLE_COLORS[agent.role] ?? '#94a3b8';
+  const color   = colorForWorkflow(agent.workflowFile);
   const monitor = MONITOR_CONFIGS[agent.state];
 
   const subtitle =
@@ -118,8 +110,7 @@ export function AgentDesk({ agent, visitor, isAway }: Props) {
   );
 
   // Visitor character details
-  const visitorConfig = visitor ? AGENT_ROLES[visitor.role] : null;
-  const visitorColor  = visitor ? (ROLE_COLORS[visitor.role] ?? '#94a3b8') : null;
+  const visitorColor  = visitor ? colorForWorkflow(visitor.role) : null;
 
   const rootClass = [
     'agent-desk',
@@ -139,10 +130,10 @@ export function AgentDesk({ agent, visitor, isAway }: Props) {
       )}
 
       {/* ── Visiting agent walks in ── */}
-      {visitor && visitorConfig && visitorColor && (
+      {visitor && visitorColor && (
         <div className={`desk-visitor ${visitor.fromRight ? 'visitor-from-right' : 'visitor-from-left'}`}>
           <AgentSprite
-            sprite={visitorConfig.sprite}
+            sprite="developer"
             state="queued"
             color={visitorColor}
           />
@@ -161,7 +152,7 @@ export function AgentDesk({ agent, visitor, isAway }: Props) {
         {agent.state === 'working' && lastAction && (
           <div className="thought-bubble">{lastAction}</div>
         )}
-        <AgentSprite sprite={role.sprite} state={isAway ? 'idle' : agent.state} color={color} />
+        <AgentSprite sprite={agent.kind === 'agent' ? 'developer' : 'builder'} state={isAway ? 'idle' : agent.state} color={color} />
       </div>
 
       {/* ── Desk workstation ── */}
@@ -228,7 +219,7 @@ export function AgentDesk({ agent, visitor, isAway }: Props) {
 
       {/* ── Nameplate ── */}
       <div className="desk-nameplate">
-        <div className="nameplate-role">{role.label}</div>
+        <div className="nameplate-role">{agent.label}</div>
         {agent.runUrl ? (
           <a
             href={agent.runUrl}

@@ -20,6 +20,7 @@ function StatDot({ state }: { state: AgentStatus['state'] }) {
     queued:   'bg-amber-400 animate-pulse',
     success:  'bg-emerald-400',
     failed:   'bg-red-500',
+    coffee:   'bg-orange-400',
     sleeping: 'bg-indigo-400',
     idle:     'bg-zinc-700',
   }[state] ?? 'bg-zinc-700';
@@ -79,10 +80,17 @@ export function OfficeFloor({ spaceId, shareToken, readOnly = false }: Props) {
       {agents.length > 0 && (
         <div className="flex flex-wrap gap-3 px-4 py-2 border-t border-zinc-800/60 bg-zinc-950/80">
           {agents.map((a) => (
-            <div key={a.role} className="flex items-center gap-1.5">
+            <div key={a.id} className="flex items-center gap-1.5">
               <StatDot state={a.state} />
+              <span className={`inline-block px-1 py-0 rounded text-[8px] uppercase tracking-wider font-semibold ${
+                a.kind === 'agent'
+                  ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30'
+                  : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30'
+              }`}>
+                {a.kind}
+              </span>
               <span className="font-mono text-[9px] text-zinc-500 capitalize tracking-wide">
-                {a.role.replace('_', '\u00A0')}
+                {a.label}
               </span>
               {a.currentStep && (
                 <span className="font-mono text-[9px] text-zinc-700 truncate max-w-[80px]">

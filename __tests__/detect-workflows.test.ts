@@ -1,58 +1,60 @@
 import { describe, it, expect } from 'vitest';
-import { scoreWorkflow, detectWorkflows } from '@/lib/detect-workflows';
-import { AGENT_ROLES } from '@/config/agent-roles';
+import { classifyWorkflows } from '@/lib/classify-workflows';
+import type { WorkflowMeta } from '@/lib/classify-workflows';
 
-describe('scoreWorkflow', () => {
-  it('scores orchestrator.yml as orchestrator with high confidence', () => {
-    const score = scoreWorkflow(
-      { filename: 'orchestrator', triggerTypes: ['schedule'], name: 'Orchestrator' },
-      AGENT_ROLES.orchestrator.autoDetect
-    );
-    expect(score).toBeGreaterThanOrEqual(4);
-  });
-
-  it('scores ci.yml as ci_runner', () => {
-    const score = scoreWorkflow(
-      { filename: 'ci', triggerTypes: ['push', 'pull_request'], name: 'CI' },
-      AGENT_ROLES.ci_runner.autoDetect
-    );
-    expect(score).toBeGreaterThanOrEqual(4);
-  });
-
-  it('scores unrelated workflow low', () => {
-    const score = scoreWorkflow(
-      { filename: 'dependabot', triggerTypes: ['schedule'], name: 'Dependabot' },
-      AGENT_ROLES.implementer.autoDetect
-    );
-    expect(score).toBeLessThan(3);
-  });
-});
-
-describe('detectWorkflows', () => {
-  const mockWorkflows = [
-    { filename: 'orchestrator', triggerTypes: ['schedule'], name: 'Orchestrator', cronExpression: '0 */2 * * *' },
-    { filename: 'claude-implement', triggerTypes: ['issues'], name: 'Implement' },
-    { filename: 'claude', triggerTypes: ['issue_comment'], name: 'Claude' },
-    { filename: 'ci', triggerTypes: ['push', 'pull_request'], name: 'CI' },
-    { filename: 'board-sync', triggerTypes: ['issues', 'pull_request'], name: 'Board Sync' },
-    { filename: 'claude-pipeline', triggerTypes: ['workflow_dispatch'], name: 'Pipeline' },
+describe('classifyWorkflows integration', () => {
+  const collabreWorkflows: WorkflowMeta[] = [
+    { filename: 'orchestrator.yml', name: 'Orchestrator', triggerTypes: ['schedule'],
+      usesActions: ['anthropic/claude-code-action@v1'], referencedSecrets: ['ANTHROPIC_API_KEY'],
+      referencedEnvVars: [], cronExpression: '0 */2 * * *' },
+    { filename: 'claude-implement.yml', name: 'Claude Implement', triggerTypes: ['issues'],
+      usesActions: ['anthropic/claude-code-action@v1'], referencedSecrets: ['ANTHROPIC_API_KEY'],
+      referencedEnvVars: [] },
+    { filename: 'claude.yml', name: 'Claude Review', triggerTypes: ['issue_comment', 'pull_request_review_comment'],
+      usesActions: ['anthropic/claude-code-action@v1'], referencedSecrets: ['ANTHROPIC_API_KEY'],
+      referencedEnvVars: [] },
+    { filename: 'ci.yml', name: 'CI', triggerTypes: ['push', 'pull_request'],
+      usesActions: ['actions/checkout@v4', 'actions/setup-node@v4'], referencedSecrets: [],
+      referencedEnvVars: [] },
+    { filename: 'sync-main-to-develop.yml', name: 'Sync Main to Develop', triggerTypes: ['push'],
+      usesActions: ['actions/checkout@v4'], referencedSecrets: ['GITHUB_TOKEN'],
+      referencedEnvVars: [] },
   ];
 
-  it('detects all 6 roles for the collabre-v2 workflow set', () => {
-    const results = detectWorkflows(mockWorkflows);
-    const detected = results.filter((r) => r.matched !== null);
-    expect(detected).toHaveLength(6);
+  it('classifies all collabre workflows correctly', () => {
+    const results = classifyWorkflows(collabreWorkflows);
+    expect(results).toHaveLength(5);
+
+    const byFile = new Map(results.map(r => [r.filename, r]));
+    expect(byFile.get('orchestrator.yml')?.kind).toBe('agent');
+    expect(byFile.get('claude-implement.yml')?.kind).toBe('agent');
+    expect(byFile.get('claude.yml')?.kind).toBe('agent');
+    expect(byFile.get('ci.yml')?.kind).toBe('workflow');
+    expect(byFile.get('sync-main-to-develop.yml')?.kind).toBe('workflow');
   });
 
-  it('marks orchestrator as confident', () => {
-    const results = detectWorkflows(mockWorkflows);
-    const orch = results.find((r) => r.role === 'orchestrator');
-    expect(orch?.confidence).toBe('confident');
+  it('preserves labels from YAML name field', () => {
+    const results = classifyWorkflows(collabreWorkflows);
+    const byFile = new Map(results.map(r => [r.filename, r]));
+    expect(byFile.get('orchestrator.yml')?.label).toBe('Orchestrator');
+    expect(byFile.get('ci.yml')?.label).toBe('CI');
   });
 
-  it('stores cronExpression for orchestrator', () => {
-    const results = detectWorkflows(mockWorkflows);
-    const orch = results.find((r) => r.role === 'orchestrator');
-    expect(orch?.matched?.cronExpression).toBe('0 */2 * * *');
+  it('preserves cron expressions', () => {
+    const results = classifyWorkflows(collabreWorkflows);
+    const orch = results.find(r => r.filename === 'orchestrator.yml');
+    expect(orch?.cronExpression).toBe('0 */2 * * *');
+  });
+
+  it('all agent classifications from AI actions have high confidence', () => {
+    const results = classifyWorkflows(collabreWorkflows);
+    // Filter to agents that were classified via AI action signals (not keyword false positives)
+    const aiAgents = results.filter(r =>
+      r.kind === 'agent' && r.signals.some(s => s.startsWith('uses ai action:'))
+    );
+    expect(aiAgents.length).toBeGreaterThanOrEqual(3);
+    for (const a of aiAgents) {
+      expect(a.confidence).toBeGreaterThanOrEqual(0.9);
+    }
   });
 });

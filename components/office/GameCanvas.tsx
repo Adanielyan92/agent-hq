@@ -6,17 +6,10 @@ import { loadGameAssets } from '@/lib/game-engine/assetLoader';
 import { OfficeState } from '@/lib/game-engine/officeState';
 import { renderFrame } from '@/lib/game-engine/renderer';
 import { MAX_DELTA_TIME_SEC, TILE_SIZE } from '@/lib/game-engine/types';
+import type { LoungeMode } from '@/lib/game-engine/types';
 import type { AgentStatus } from '@/lib/types';
-
-/** Role → seat/palette index (matches AGENT_SEAT_INDEX) */
-const ROLES = [
-  'orchestrator',
-  'implementer',
-  'reviewer',
-  'ci_runner',
-  'board_sync',
-  'pipeline',
-] as const;
+import { createAgentHqLayout } from '@/lib/game-engine/agentHqLayout';
+import { createAgentHqLayoutLarge, LOUNGE_TILES_LARGE } from '@/lib/game-engine/agentHqLayoutLarge';
 
 interface Props {
   agents: AgentStatus[];
@@ -29,29 +22,23 @@ export function GameCanvas({ agents }: Props) {
   const rafRef       = useRef<number>(0);
   const lastTimeRef  = useRef<number>(0);
   const zoomRef      = useRef<number>(3);
+  // Maps agent ID (filename) → character index in game engine
+  const agentMapRef  = useRef<Map<string, number>>(new Map());
+  // Counter for assigning new character indices
+  const nextIndexRef = useRef(0);
   // Track previous active states so we only trigger walks on changes
   const prevActiveRef = useRef<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Flipped to true once OfficeState has been created (deferred until first agent data)
+  const [engineReady, setEngineReady] = useState(false);
 
-  // ── Initialize engine on mount ──────────────────────────────
+  // ── Load assets on mount ───────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     loadGameAssets().then((assets) => {
       if (cancelled) return;
       assetsRef.current = assets;
-
-      const state = new OfficeState();
-      stateRef.current = state;
-
-      ROLES.forEach((role, i) => {
-        state.addAgent(i, i, role.replace('_', ' '));
-        // Start all agents at lounge — first API sync will walk active ones to desks.
-        // This avoids the visual blink (all at desks → idle ones teleport to lounge).
-        state.setAgentActive(i, false);
-        state.sendToLounge(i);
-      });
-
       setLoading(false);
     }).catch((err: unknown) => {
       if (cancelled) return;
@@ -62,52 +49,94 @@ export function GameCanvas({ agents }: Props) {
 
   // ── Sync agent status → game state ──────────────────────────
   useEffect(() => {
-    // Wait until assets are loaded and game state is initialized
+    // Wait until assets are loaded
     if (loading || error) return;
-    const state = stateRef.current;
-    if (!state) return;
 
-    // Skip sync when no agent data has arrived yet — agents start at the
-    // lounge and should stay there until we know their real status.
+    // Skip sync when no agent data has arrived yet
     if (agents.length === 0) return;
 
-    const byRole = new Map(agents.map((a) => [a.role, a]));
+    // Lazily create OfficeState on first agent arrival (layout chosen once)
+    if (!stateRef.current) {
+      const useLarge = agents.length > 6;
+      const layout = useLarge ? createAgentHqLayoutLarge() : createAgentHqLayout();
+      const loungeTiles = useLarge ? LOUNGE_TILES_LARGE : undefined;
+      stateRef.current = new OfficeState(layout, loungeTiles);
+      setEngineReady(true);
+    }
+    const state = stateRef.current;
+
+    const agentMap = agentMapRef.current;
+    const currentIds = new Set(agents.map(a => a.id));
     const isFirstSync = Object.keys(prevActiveRef.current).length === 0;
 
-    ROLES.forEach((role, i) => {
-      const agent = byRole.get(role);
-      // Agents stay at desk while working, queued, OR recently completed (success/failed).
-      // An agent who just finished a task stays at their desk reviewing — they don't
-      // immediately run to the break room. They go to lounge only when state becomes
-      // 'idle' or 'sleeping' (after the idleAfterMinutes window expires).
-      const isActive = agent?.state === 'working' || agent?.state === 'queued'
-                    || agent?.state === 'success' || agent?.state === 'failed';
-      // Success → reading/reviewing pose; others → current step or typing
-      const tool = agent?.state === 'success' ? 'Read' : (agent?.currentStep ?? null);
-      const wasActive = prevActiveRef.current[role] ?? false;
+    // Remove agents that are no longer in props
+    for (const [id, index] of agentMap) {
+      if (!currentIds.has(id)) {
+        state.removeAgent(index);
+        agentMap.delete(id);
+        delete prevActiveRef.current[id];
+      }
+    }
 
-      state.setAgentActive(i, isActive, tool);
+    // Add new agents and update existing ones
+    for (const agent of agents) {
+      let index = agentMap.get(agent.id);
+
+      if (index === undefined) {
+        // New agent — create in game engine
+        index = nextIndexRef.current++;
+        state.addAgent(index, index % 6, agent.label);
+        agentMap.set(agent.id, index);
+
+        // Determine initial state
+        const isActive = agent.state === 'working' || agent.state === 'queued'
+                      || agent.state === 'success' || agent.state === 'failed';
+        const tool = agent.state === 'success' ? 'Read' : (agent.currentStep ?? null);
+        state.setAgentActive(index, isActive, tool);
+
+        const loungeMode: LoungeMode =
+          agent.state === 'coffee' ? 'coffee' :
+          agent.state === 'sleeping' ? 'sleeping' : 'idle';
+        state.setLoungeMode(index, loungeMode);
+
+        if (isActive) {
+          state.sendToSeat(index);
+        } else {
+          state.sendToLounge(index);
+        }
+
+        prevActiveRef.current[agent.id] = isActive;
+        continue;
+      }
+
+      // Existing agent — update state
+      const isActive = agent.state === 'working' || agent.state === 'queued'
+                    || agent.state === 'success' || agent.state === 'failed';
+      const tool = agent.state === 'success' ? 'Read' : (agent.currentStep ?? null);
+      const wasActive = prevActiveRef.current[agent.id] ?? false;
+
+      state.setAgentActive(index, isActive, tool);
+
+      const loungeMode: LoungeMode =
+        agent.state === 'coffee' ? 'coffee' :
+        agent.state === 'sleeping' ? 'sleeping' : 'idle';
+      state.setLoungeMode(index, loungeMode);
 
       if (isActive && !wasActive) {
-        // Just became active → walk to own desk
-        state.sendToSeat(i);
+        // Just became active — walk to own desk
+        state.sendToSeat(index);
       } else if ((wasActive && !isActive) || (isFirstSync && !isActive)) {
-        // Just became idle, or first load with agent idle → teleport to lounge
-        state.sendToLounge(i);
+        // Just became idle, or first load with agent idle — teleport to lounge
+        state.sendToLounge(index);
       }
-    });
 
-    // Update previous active state tracking
-    ROLES.forEach((role) => {
-      const agent = byRole.get(role);
-      prevActiveRef.current[role] = agent?.state === 'working' || agent?.state === 'queued'
-                                 || agent?.state === 'success' || agent?.state === 'failed';
-    });
+      prevActiveRef.current[agent.id] = isActive;
+    }
   }, [agents, loading, error]);
 
   // ── Game loop ────────────────────────────────────────────────
   useEffect(() => {
-    if (loading || error) return;
+    if (loading || error || !engineReady) return;
 
     const canvas = canvasRef.current;
     const state  = stateRef.current;
@@ -148,7 +177,7 @@ export function GameCanvas({ agents }: Props) {
     lastTimeRef.current = performance.now();
     rafRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
-  }, [loading, error]);
+  }, [loading, error, engineReady]);
 
   if (error) {
     return (
@@ -168,7 +197,7 @@ export function GameCanvas({ agents }: Props) {
             ))}
           </div>
           <p className="font-mono text-[10px] text-zinc-600 tracking-widest uppercase">
-            Loading sprites…
+            Loading sprites...
           </p>
         </div>
       </div>

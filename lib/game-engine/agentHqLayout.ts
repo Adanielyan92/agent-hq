@@ -9,24 +9,6 @@ const WALL_COLOR = '#3a3028';
 const VOID_COLOR = 'transparent';
 const LOUNGE_COLOR = '#9a6840';
 
-/**
- * Agent index → role:
- *   0 orchestrator  (left wing, near hallway — walks between teams)
- *   1 implementer   (left wing)
- *   2 reviewer      (left wing, below implementer — visits impl desk)
- *   3 ci_runner     (right wing)
- *   4 board_sync    (right wing)
- *   5 pipeline      (right wing)
- */
-export const AGENT_SEAT_INDEX = {
-  orchestrator: 0,
-  implementer:  1,
-  reviewer:     2,
-  ci_runner:    3,
-  board_sync:   4,
-  pipeline:     5,
-} as const;
-
 /** Build the agent-hq office layout: 24 cols × 16 rows */
 export function createAgentHqLayout(): OfficeLayout {
   const COLS = 24;

@@ -155,7 +155,7 @@ export class OfficeState {
   private pcAnimFrame = 0;
 
 
-  constructor(layout?: OfficeLayout) {
+  constructor(layout?: OfficeLayout, loungeTiles?: Array<{ col: number; row: number }>) {
     this.layout = layout ?? createAgentHqLayout();
     this.tileMap = buildTileMap(this.layout);
     this.seats = buildSeats(this.layout.furniture);
@@ -163,8 +163,10 @@ export class OfficeState {
     this.blockedTiles = buildBlockedTiles(this.layout.furniture, seatTiles);
     this.furnitureInstances = buildFurnitureInstances(this.layout.furniture);
     this.walkableTiles = getWalkableTiles(this.tileMap, this.blockedTiles);
-    this.leftLoungeTiles  = LOUNGE_TILES.filter(t => t.col <= 10 && isWalkable(t.col, t.row, this.tileMap, this.blockedTiles));
-    this.rightLoungeTiles = LOUNGE_TILES.filter(t => t.col >= 13 && isWalkable(t.col, t.row, this.tileMap, this.blockedTiles));
+    const loungeSource = loungeTiles ?? LOUNGE_TILES;
+    const midCol = Math.floor(this.layout.cols / 2);
+    this.leftLoungeTiles  = loungeSource.filter(t => t.col <= midCol - 2 && isWalkable(t.col, t.row, this.tileMap, this.blockedTiles));
+    this.rightLoungeTiles = loungeSource.filter(t => t.col >= midCol + 1 && isWalkable(t.col, t.row, this.tileMap, this.blockedTiles));
     this.idleWalkableTiles = [...this.leftLoungeTiles, ...this.rightLoungeTiles];
 
     // Build agent → PC instance map from uid tags
@@ -180,7 +182,8 @@ export class OfficeState {
   private loungeForAgent(ch: Character): Array<{ col: number; row: number }> {
     const seat = ch.seatId ? this.seats.get(ch.seatId) : null;
     if (!seat) return this.idleWalkableTiles;
-    return seat.seatCol <= 12 ? this.leftLoungeTiles : this.rightLoungeTiles;
+    const midCol = Math.floor(this.layout.cols / 2);
+    return seat.seatCol <= midCol ? this.leftLoungeTiles : this.rightLoungeTiles;
   }
 
   private findFreeSeat(): string | null {
@@ -225,6 +228,16 @@ export class OfficeState {
     this.characters.set(id, ch);
   }
 
+  removeAgent(id: number): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    if (ch.seatId) {
+      const seat = this.seats.get(ch.seatId);
+      if (seat) seat.assigned = false;
+    }
+    this.characters.delete(id);
+  }
+
   setAgentActive(id: number, active: boolean, tool?: string | null): void {
     const ch = this.characters.get(id);
     if (!ch) return;
@@ -263,6 +276,12 @@ export class OfficeState {
       // Path temporarily blocked — set IDLE so the game loop retries every frame
       ch.state = CharacterState.IDLE;
     }
+  }
+
+  /** Set the loungeMode for a character (idle / coffee / sleeping) */
+  setLoungeMode(id: number, mode: import('./types').LoungeMode): void {
+    const ch = this.characters.get(id);
+    if (ch) ch.loungeMode = mode;
   }
 
   /** Teleport an idle agent directly onto a lounge seat — no walking. */

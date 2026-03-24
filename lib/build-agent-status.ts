@@ -1,12 +1,15 @@
 import { CronExpressionParser } from 'cron-parser';
-import type { AgentStatus, AgentState, AgentJobStep, WorkflowConfig, AgentRoleKey,
+import type { WorkflowEntry, AgentStatus, AgentState, AgentJobStep, AgentKind,
               ActivityItem, ActivityItemType } from '@/lib/types';
-import { AGENT_ROLES } from '@/config/agent-roles';
 import type { GHWorkflowRun, GHIssue, GHPR, GHRunJob } from '@/lib/github';
 
 // Run-id → job/step data, fetched separately for active runs
 export type JobsMap = Map<number, GHRunJob[]>;
 
+const AGENT_DESK_GRACE = 15;    // minutes
+const WORKFLOW_DESK_GRACE = 5;
+const COFFEE_AFTER_MIN = 60;    // 1 hour idle → coffee
+const SLEEP_AFTER_MIN  = 180;   // 3 hours idle → sleeping
 
 function getNextCronAt(expression: string): string | null {
   try {
@@ -17,8 +20,15 @@ function getNextCronAt(expression: string): string | null {
   }
 }
 
+/** Determine the idle sub-state based on minutes since last completed run */
+function idleSubState(minutesSinceRun: number): AgentState {
+  if (minutesSinceRun >= SLEEP_AFTER_MIN) return 'sleeping';
+  if (minutesSinceRun >= COFFEE_AFTER_MIN) return 'coffee';
+  return 'idle';
+}
+
 export function buildAgentStatus(
-  config: WorkflowConfig,
+  entries: WorkflowEntry[],
   runs: GHWorkflowRun[],
   openIssues: GHIssue[],
   openPRs: GHPR[],
@@ -26,50 +36,40 @@ export function buildAgentStatus(
   jobsMap: JobsMap = new Map(),
   logSnippetsMap: Map<number, string | null> = new Map()
 ): AgentStatus[] {
-  const roles = Object.keys(AGENT_ROLES) as AgentRoleKey[];
-  const cutoff = (minutesAgo: number) =>
-    new Date(Date.now() - minutesAgo * 60 * 1000);
+  const now = Date.now();
 
-  return roles.map((role) => {
-    const entry = config[role];
-    const idleAfter = AGENT_ROLES[role].idleAfterMinutes;
+  const visible = entries.filter(e => !e.hidden);
 
-    if (!entry) {
-      return {
-        role, state: 'idle', workflowFile: null, runId: null, runName: null,
-        runUrl: null, startedAt: null, conclusion: null, nextCronAt: null, currentIssue: null,
-        currentStep: null, stepCurrent: null, stepTotal: null, jobSteps: [],
-        triggeredBy: null, triggeredByBot: false, event: null, logSnippet: null,
-      };
-    }
+  const statuses: AgentStatus[] = visible.map((entry) => {
+    const kind: AgentKind = entry.userKind ?? entry.kind;
+    const label = entry.userLabel ?? entry.label;
+    const deskGrace = kind === 'agent' ? AGENT_DESK_GRACE : WORKFLOW_DESK_GRACE;
 
-    // Find runs for this role's workflow file(s)
-    const allFilenames = [entry.filename, ...(entry.additionalFilenames ?? [])];
-    const roleRuns = runs
-      .filter((r) => allFilenames.some((fn) => r.path.endsWith(fn)))
+    // Find runs for this entry's workflow file
+    const entryRuns = runs
+      .filter((r) => r.path.endsWith(entry.filename))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    const activeRun = roleRuns.find((r) => r.status === 'in_progress');
-    const queuedRun = roleRuns.find((r) => r.status === 'queued');
-    const recentRun = roleRuns.find(
-      (r) => r.status === 'completed' && new Date(r.created_at) > cutoff(idleAfter)
-    );
+    const activeRun = entryRuns.find((r) => r.status === 'in_progress');
+    const queuedRun = entryRuns.find((r) => r.status === 'queued');
+    const latestCompleted = entryRuns.find((r) => r.status === 'completed');
 
     let state: AgentState;
-    const targetRun = activeRun ?? queuedRun ?? recentRun;
+    const targetRun = activeRun ?? queuedRun ?? latestCompleted;
 
     if (activeRun) {
       state = 'working';
     } else if (queuedRun) {
       state = 'queued';
-    } else if (recentRun?.conclusion === 'success') {
-      state = 'success';
-    } else if (recentRun?.conclusion === 'failure') {
-      state = 'failed';
-    } else if (entry.cronExpression) {
-      state = 'sleeping';
+    } else if (latestCompleted) {
+      const minutesSince = (now - new Date(latestCompleted.created_at).getTime()) / 60_000;
+      if (minutesSince < deskGrace) {
+        state = latestCompleted.conclusion === 'success' ? 'success' : 'failed';
+      } else {
+        state = idleSubState(minutesSince);
+      }
     } else {
-      state = 'idle';
+      state = 'sleeping';
     }
 
     // ── Step-level detail for active runs ──────────────────────────
@@ -98,7 +98,7 @@ export function buildAgentStatus(
       }
     }
 
-    // ── Sub-agent / triggering info ─────────────────────────────────
+    // ── Triggering info ─────────────────────────────────────────────
     const actor          = targetRun?.triggering_actor ?? null;
     const triggeredByBot = actor?.type === 'Bot' ||
                            actor?.login?.includes('[bot]') === true ||
@@ -107,7 +107,9 @@ export function buildAgentStatus(
     const logSnippet = activeRun ? (logSnippetsMap.get(activeRun.id) ?? null) : null;
 
     return {
-      role,
+      id: entry.filename,
+      label,
+      kind,
       state,
       workflowFile: entry.filename,
       runId:        targetRun?.id ?? null,
@@ -128,7 +130,54 @@ export function buildAgentStatus(
       logSnippet,
     };
   });
+
+  // Sort: agents first (alphabetically by filename), then workflows (alphabetically)
+  statuses.sort((a, b) => {
+    if (a.kind !== b.kind) {
+      return a.kind === 'agent' ? -1 : 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
+  return statuses;
 }
+
+// ── Legacy config migration ─────────────────────────────────────────
+
+const LEGACY_ROLE_KIND: Record<string, 'agent' | 'workflow'> = {
+  orchestrator: 'agent', implementer: 'agent', reviewer: 'agent', pipeline: 'agent',
+  ci_runner: 'workflow', board_sync: 'workflow', branch_sync: 'workflow',
+};
+const LEGACY_ROLE_LABEL: Record<string, string> = {
+  orchestrator: 'Orchestrator', implementer: 'Implementer', reviewer: 'Reviewer',
+  ci_runner: 'CI Runner', board_sync: 'Board Sync', branch_sync: 'Branch Sync',
+  pipeline: 'Pipeline',
+};
+
+export function migrateOldConfig(config: Record<string, any>): WorkflowEntry[] {
+  const entries: WorkflowEntry[] = [];
+  for (const [role, entry] of Object.entries(config)) {
+    if (!entry || !entry.filename) continue;
+    const kind = LEGACY_ROLE_KIND[role] ?? 'workflow';
+    const label = LEGACY_ROLE_LABEL[role] ?? role;
+    entries.push({
+      filename: entry.filename, kind, label,
+      confidence: 0.5, signals: ['migrated from legacy config'],
+      ...(entry.cronExpression ? { cronExpression: entry.cronExpression } : {}),
+    });
+    if (entry.additionalFilenames) {
+      for (const fn of entry.additionalFilenames) {
+        entries.push({
+          filename: fn, kind, label: `${label} (alt)`,
+          confidence: 0.5, signals: ['migrated from legacy config'],
+        });
+      }
+    }
+  }
+  return entries;
+}
+
+// ── Activity feed (unchanged) ───────────────────────────────────────
 
 export function buildActivityFeed(
   runs: GHWorkflowRun[],

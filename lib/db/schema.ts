@@ -1,7 +1,7 @@
 import {
   pgTable, text, boolean, timestamp, uuid, jsonb,
 } from 'drizzle-orm/pg-core';
-import type { WorkflowConfig } from '@/lib/types';
+import type { WorkflowEntry, LegacyWorkflowConfig } from '@/lib/types';
 
 export const users = pgTable('users', {
   id:               text('id').primaryKey(),           // GitHub user ID as string
@@ -19,7 +19,7 @@ export const spaces = pgTable('spaces', {
   repo_full_name:  text('repo_full_name').notNull(),
   workflow_config: jsonb('workflow_config')
                      .notNull()
-                     .$type<WorkflowConfig>(),
+                     .$type<WorkflowEntry[] | LegacyWorkflowConfig>(),
   share_token:     uuid('share_token').notNull().unique().defaultRandom(),
   share_enabled:   boolean('share_enabled').notNull().default(false),
   created_at:      timestamp('created_at').defaultNow(),
