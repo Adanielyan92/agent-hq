@@ -51,14 +51,14 @@ function collectSignals(wf: WorkflowMeta): Signal[] {
   }
 
   for (const kw of AI_KEYWORDS) {
-    if (lowerName.includes(kw)) {
+    if (new RegExp(`\\b${kw}\\b`).test(lowerName)) {
       signals.push({ kind: 'agent', confidence: 0.6, reason: `name contains ai keyword: ${kw}` });
       break;
     }
   }
 
   for (const kw of CI_KEYWORDS) {
-    if (lowerName.includes(kw)) {
+    if (new RegExp(`\\b${kw}\\b`).test(lowerName)) {
       signals.push({ kind: 'workflow', confidence: 0.6, reason: `name contains ci keyword: ${kw}` });
       break;
     }
