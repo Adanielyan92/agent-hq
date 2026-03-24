@@ -1,285 +1,315 @@
-# Agent HQ
+<p align="center">
+  <img src="docs/screenshots/hero.png" alt="Agent HQ — pixel-art CI office" width="720" />
+</p>
 
-> Watch your GitHub Actions CI agents work in real time — as animated pixel-art characters in a top-down office.
+<h1 align="center">Agent HQ</h1>
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_GITHUB_USERNAME/agent-hq&env=GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,AUTH_SECRET,TOKEN_ENCRYPTION_SECRET&envDescription=See%20.env.example%20for%20setup%20instructions&project-name=agent-hq)
+<p align="center">
+  <strong>Watch your GitHub Actions CI agents work in real time — as animated pixel-art characters in a virtual office.</strong>
+</p>
 
-Each GitHub Actions workflow you care about gets mapped to an **agent role** (orchestrator, implementer, reviewer, etc.). When a workflow is running, its character walks to their desk and starts typing. When idle, they wander the lounge. The name tag turns teal and shows the active step name while working.
-
----
-
-## How it works
-
-```
-GitHub Actions  →  /api/spaces/[id]/status  →  GameCanvas (canvas 2D)
-                       (polls every 15s)            ↕
-                   Neon Postgres (spaces/tokens)   OfficeState (game engine)
-```
-
-1. **Auth** — Sign in with GitHub OAuth. Your access token is AES-256-GCM encrypted before storage.
-2. **Spaces** — A *space* is one repo + one workflow mapping. You can have multiple spaces (one per repo or project).
-3. **Workflow detection** — When you create a space the app scans your `.github/workflows/` directory and scores each file against each agent role using filename patterns, trigger types, and name keywords.
-4. **Live polling** — The space view polls `/api/spaces/[id]/status` every 15 seconds. That route calls the GitHub API for workflow runs, job steps, open PRs, and issues, then maps them to `AgentStatus` objects.
-5. **Game engine** — `AgentStatus[]` drives a pixel-art canvas: active agents walk to their desk and type; idle agents teleport to lounge seats; the active step name appears in a tool bubble above the character's name tag.
+<p align="center">
+  <a href="https://github.com/Adanielyan92/agent-hq/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Adanielyan92/agent-hq?style=flat&color=22d3ee" /></a>
+  <a href="https://github.com/Adanielyan92/agent-hq/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/Adanielyan92/agent-hq?style=flat&color=a78bfa" /></a>
+  <a href="https://github.com/Adanielyan92/agent-hq/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Adanielyan92/agent-hq/ci.yml?style=flat&label=CI" /></a>
+  <a href="https://vercel.com/new/clone?repository-url=https://github.com/Adanielyan92/agent-hq&env=GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,AUTH_SECRET,TOKEN_ENCRYPTION_SECRET&envDescription=See%20.env.example%20for%20setup%20instructions&project-name=agent-hq"><img alt="Deploy with Vercel" src="https://vercel.com/button" /></a>
+</p>
 
 ---
 
-## Tech stack
+## What is Agent HQ?
+
+Agent HQ turns your GitHub Actions workflows into a live, animated pixel-art office. Each workflow — whether it's a Claude AI agent, a CI pipeline, or a deploy script — becomes a character with their own desk. When a workflow runs, its character walks to their desk and starts working. When idle, they hang out in the break room drinking coffee or sleeping.
+
+**It works with any GitHub repo.** No configuration needed — just connect your repo and Agent HQ automatically detects and classifies every workflow.
+
+### Why?
+
+- **Visibility** — see at a glance which CI agents are active, idle, or failing across your repos
+- **AI agent monitoring** — purpose-built for the emerging world of autonomous CI agents (Claude Code, GitHub Copilot, CodeRabbit) running alongside traditional CI
+- **Team dashboards** — share a live office view with your team via a public link — no sign-in required
+- **It's fun** — turns the boring GitHub Actions tab into something you actually want to look at
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/hero.png" alt="Live office view with agents working, activity feed, and log output" width="720" />
+  <br /><em>Live office — agents at desks, idle ones in the lounge, activity feed and live logs below</em>
+</p>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/dashboard.png" alt="Dashboard showing your spaces" width="400" /><br /><em>Dashboard — manage your monitored repos</em></td>
+    <td align="center"><img src="docs/screenshots/new-space.png" alt="New space creation wizard" width="400" /><br /><em>Connect a repo in seconds</em></td>
+  </tr>
+</table>
+
+---
+
+## Features
+
+### Smart Workflow Detection
+
+Agent HQ analyzes your workflow YAML files to automatically classify each one:
+
+| Signal | How it's detected | Example |
+|--------|-------------------|---------|
+| **AI Actions** | Scans `uses:` steps for known AI actions | `anthropic/claude-code-action`, `github/copilot-*`, `coderabbitai/*` |
+| **AI Secrets** | Detects AI-related environment variables | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` |
+| **Keywords** | Matches names/filenames against known patterns | "claude", "copilot", "ci", "build", "deploy" |
+| **Triggers** | Uses trigger types as a fallback signal | `schedule`, `issues` lean agent; `push`, `pull_request` lean workflow |
+
+Workflows are classified as **Agent** (AI-powered, autonomous) or **Workflow** (traditional CI/CD). Users can override any classification from the settings page.
+
+### Live Office Visualization
+
+- Agents walk to their desks when a workflow starts and type at their computers
+- Idle agents move to the break room — drinking coffee (1-3hrs idle) or sleeping (3hrs+)
+- Name tags show the current step name and tool being used
+- Live log output streams in a terminal panel below the office
+- Activity feed shows recent runs, PRs, and issues
+
+### Adaptive Layout
+
+- 1-6 workflows: cozy 6-desk office
+- 7-10 workflows: larger 10-desk layout
+- 11+ workflows: extra agents hang in the lounge (still tracked in the status bar)
+
+### User Overrides (Settings Page)
+
+- Rename any workflow with a custom label
+- Toggle between Agent and Workflow classification
+- Hide workflows you don't care about
+- Re-detect to pick up new/changed workflow files
+
+### Shareable Links
+
+Each space has a public share URL (`/s/[token]`) — anyone with the link can watch the live office without signing in. Enable/disable sharing with one click.
+
+---
+
+## Quick Start
+
+### Option A: Deploy to Vercel (recommended)
+
+1. Click the **Deploy with Vercel** button above
+2. Create a [GitHub OAuth App](https://github.com/settings/developers) with callback URL `https://your-app.vercel.app/api/auth/callback/github`
+3. Add Neon Postgres from the [Vercel Marketplace](https://vercel.com/marketplace)
+4. Set the required environment variables (see below)
+5. Run `pnpm db:push` to initialize the database schema
+
+### Option B: Local development
+
+```bash
+git clone https://github.com/Adanielyan92/agent-hq.git
+cd agent-hq
+pnpm install
+```
+
+Create a [GitHub OAuth App](https://github.com/settings/developers) with callback URL `http://localhost:3000/api/auth/callback/github`, then:
+
+```bash
+cp .env.example .env.local
+# Fill in your OAuth credentials and database URL
+pnpm db:push    # initialize schema
+pnpm dev        # http://localhost:3000
+```
+
+### Environment Variables
+
+```bash
+GITHUB_CLIENT_ID=...          # GitHub OAuth App
+GITHUB_CLIENT_SECRET=...      # GitHub OAuth App
+AUTH_SECRET=...                # openssl rand -base64 32
+TOKEN_ENCRYPTION_SECRET=...   # openssl rand -base64 32
+DATABASE_URL=...               # Neon Postgres connection string
+AUTH_URL=https://your-app.vercel.app  # or http://localhost:3000
+```
+
+---
+
+## How It Works
+
+```
+GitHub Actions API  ──>  /api/spaces/[id]/status  ──>  GameCanvas (Canvas 2D)
+                          (polls every 10s)                  |
+                         Neon Postgres                  OfficeState
+                         (spaces, tokens)               (pathfinding, seats,
+                                                         character animation)
+```
+
+1. **Connect** — Sign in with GitHub. Your access token is AES-256-GCM encrypted at rest.
+2. **Detect** — Agent HQ scans `.github/workflows/` and classifies each workflow by analyzing actions, secrets, keywords, and triggers.
+3. **Monitor** — The office view polls GitHub every 10 seconds for workflow runs, job steps, PRs, and issues.
+4. **Animate** — The game engine maps each workflow's status to a character: active agents walk to desks; idle agents go to the lounge with coffee or zzz bubbles.
+
+---
+
+## Tech Stack
 
 | Layer | Choice |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Auth | Auth.js v5 (next-auth beta) — GitHub OAuth |
-| Database | Neon Postgres (serverless) |
-| ORM | Drizzle ORM |
-| UI | Tailwind CSS v4, shadcn/ui, Geist font |
-| Animations | Framer Motion (UI), Canvas 2D (game) |
-| Testing | Vitest |
-| Deployment | Vercel |
+|-------|--------|
+| Framework | [Next.js 16](https://nextjs.org) (App Router) |
+| Auth | [Auth.js v5](https://authjs.dev) — GitHub OAuth |
+| Database | [Neon Postgres](https://neon.tech) (serverless) |
+| ORM | [Drizzle ORM](https://orm.drizzle.team) |
+| UI | [Tailwind CSS v4](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com), [Geist](https://vercel.com/font) |
+| Game Engine | Custom Canvas 2D with A* pathfinding |
+| Testing | [Vitest](https://vitest.dev) |
+| Deployment | [Vercel](https://vercel.com) |
 
 ---
 
-## Self-hosting
+## Architecture
 
-### 1 — Fork & deploy
+### Workflow Classifier (`lib/classify-workflows.ts`)
 
-Click **Deploy with Vercel** above, or:
+The classifier uses a weighted signal cascade — no hardcoded roles. Each workflow is scored independently:
 
-```bash
-git clone https://github.com/YOUR_USERNAME/agent-hq
-cd agent-hq
+```
+Priority 1: Known AI actions (confidence 0.9)     anthropic/claude-code-action
+Priority 2: AI secrets/env vars (confidence 0.7)   ANTHROPIC_API_KEY, OPENAI_API_KEY
+Priority 3: AI keywords (confidence 0.6)            "claude", "copilot", "agent"
+Priority 4: CI keywords (confidence 0.6)             "ci", "test", "build", "deploy"
+Priority 5: Trigger heuristic (confidence 0.3)       schedule → agent, push → workflow
 ```
 
-### 2 — GitHub OAuth App
+On ties, agent wins. All matching signals are recorded for transparency.
 
-Go to [github.com/settings/developers](https://github.com/settings/developers) → **New OAuth App**:
+### Game Engine (`lib/game-engine/`)
 
-- **Homepage URL**: `https://your-app.vercel.app`
-- **Authorization callback URL**: `https://your-app.vercel.app/api/auth/callback/github`
-
-Copy the **Client ID** and generate a **Client Secret**.
-
-### 3 — Environment variables
-
-Copy `.env.example` to `.env.local` and fill in:
-
-```bash
-# GitHub OAuth App (step 2 above)
-GITHUB_CLIENT_ID=Iv1.xxxx
-GITHUB_CLIENT_SECRET=xxxx
-
-# Auth.js secret — run: openssl rand -base64 32
-AUTH_SECRET=xxxx
-
-# Token encryption key — run: openssl rand -base64 32
-TOKEN_ENCRYPTION_SECRET=xxxx
-
-# Neon Postgres connection string
-DATABASE_URL=postgresql://...
-
-# App URL
-AUTH_URL=https://your-app.vercel.app
+```
+game-engine/
+├── types.ts              — CharacterState, Direction, tile constants
+├── agentHqLayout.ts      — 24x16 office (6 desks)
+├── agentHqLayoutLarge.ts — 30x18 office (10 desks)
+├── tileMap.ts            — A* pathfinding, walkability checks
+├── characters.ts         — per-frame state machine, animation
+├── officeState.ts        — seat assignment, lounge dispatch, PC glow animation
+├── assetLoader.ts        — sprite sheet and floor tile loading
+└── renderer.ts           — Z-sorted scene rendering, name tags, tool/status bubbles
 ```
 
-### 4 — Database
+**Character states:** `TYPE` (at desk, working) → `WALK` (pathfinding) → `IDLE` (wandering) → `LOUNGE` (break room, with coffee/sleep indicators)
 
-Add **Neon Postgres** from [Vercel Marketplace](https://vercel.com/marketplace) (`DATABASE_URL` is auto-provisioned), then run the schema push once:
+### Idle States
 
-```bash
-vercel env pull .env.local   # pull all env vars locally
-pnpm db:push                  # push schema to Neon
-```
-
-### 5 — Deploy
-
-```bash
-vercel --prod
-```
+| Duration idle | Visual state | In-game behavior |
+|--------------|-------------|------------------|
+| < 1 hour | Idle | Sitting in lounge, normal |
+| 1-3 hours | Coffee | Lounge with floating coffee emoji |
+| 3+ hours | Sleeping | Lounge with floating zzz emoji |
 
 ---
 
-## Local development
+## API Reference
 
-```bash
-pnpm install
-vercel link          # connect to your Vercel project
-vercel env pull      # pull env vars to .env.local
-pnpm db:push         # apply schema (first time only)
-pnpm dev             # http://localhost:3000
-```
-
-Run tests:
-
-```bash
-pnpm test
-```
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/repos` | GET | Session | List user's GitHub repos |
+| `/api/detect` | POST | Session | Classify workflows for a repo |
+| `/api/spaces` | POST | Session | Create a new space |
+| `/api/spaces/[id]` | PATCH | Session | Update workflow config or share settings |
+| `/api/spaces/[id]` | DELETE | Session | Delete a space |
+| `/api/spaces/[id]/status` | GET | Session or share token | Live agent status + activity feed |
+| `/api/spaces/[id]/share` | PATCH | Session | Toggle share link |
 
 ---
 
-## Customizing agent roles
-
-Each agent role lives in [`config/agent-roles.ts`](config/agent-roles.ts). The six built-in roles are:
-
-| Role | What it watches |
-|---|---|
-| `orchestrator` | Scheduled workflow, monitors board & plans |
-| `implementer` | Triggered on issues, writes code |
-| `reviewer` | Triggered on PR comments, reviews code |
-| `ci_runner` | Push/PR CI — lint, build, test |
-| `board_sync` | Keeps GitHub project board in sync |
-| `pipeline` | Full autonomous implement-review-merge loop |
-
-To add a role or rename one, edit `config/agent-roles.ts`:
-
-```ts
-export const AGENT_ROLES = {
-  my_custom_agent: {
-    label: 'My Agent',
-    description: 'Does something useful',
-    sprite: 'developer',       // builder | developer | manager | reviewer | scribe
-    color: 'blue',
-    idleAfterMinutes: 60,
-    autoDetect: {
-      filenamePatterns: ['my-agent*', 'custom*'],
-      triggerTypes: ['workflow_dispatch'],
-      nameKeywords: ['custom', 'agent'],
-    },
-  },
-  // ...other roles
-};
-```
-
-The `autoDetect` config drives the workflow scanner: files are scored by filename glob match (+3), trigger type match (+2), and name keyword match (+1 per keyword). The highest-scoring file is auto-selected.
-
-> **Important**: The number of roles must match the `ROLES` array in [`components/office/GameCanvas.tsx`](components/office/GameCanvas.tsx) and the desk count in [`lib/game-engine/agentHqLayout.ts`](lib/game-engine/agentHqLayout.ts). If you add roles, add corresponding desks.
-
----
-
-## Sharing a space
-
-Each space has a **share link** (`/s/[share_token]`) that lets anyone view the live office without signing in. Enable it from the space settings. The share token is a random UUID stored in the database; disabling sharing revokes access immediately.
-
----
-
-## Game engine
-
-The pixel-art office runs entirely in a `<canvas>` element. The engine is in [`lib/game-engine/`](lib/game-engine/):
-
-```
-lib/game-engine/
-├── types.ts          — constants, enums (CharacterState, Direction, tile sizes)
-├── agentHqLayout.ts  — office map (24×16 tiles), furniture positions & metadata
-├── tileMap.ts        — A* pathfinding, walkability checks
-├── characters.ts     — character creation, per-frame state machine, animation
-├── officeState.ts    — OfficeState class: seat assignment, lounge dispatch, PC animation
-├── assetLoader.ts    — loads sprite PNGs and floor tile images
-└── renderer.ts       — renderFloor + renderScene (Z-sorted drawables) + renderFrame
-```
-
-### Character states
-
-| State | Behaviour |
-|---|---|
-| `TYPE` | At desk, typing animation (frame cols 3–6 depending on tool type) |
-| `WALK` | Moving along A\*-computed path |
-| `IDLE` | Standing still; wanders lounge tiles on a timer |
-| `LOUNGE` | Seated in break room; transitions to `IDLE` → `WALK` → `TYPE` when activated |
-
-### Z-sorting
-
-All furniture and characters are collected as `ZDrawable` items and sorted by `zY` before drawing. Furniture `zY` is `pixelY + imageHeight`; characters get `ch.y + TILE_SIZE/2 + 0.5` so they render just after any object at the same tile. Chairs use `(row + 1) * TILE_SIZE` so the character always appears in front of their own chair.
-
-### Workflow → character mapping
-
-`GameCanvas.tsx` calls `state.setAgentActive(id, isActive, tool)` on each poll:
-
-- **Active** (`working` or `queued`) → `sendToSeat(id)` — character walks to desk, enters `TYPE` state
-- **Just became idle** → `sendToLounge(id)` — character teleports to a free lounge seat
-- `currentStep` is passed as the `tool` string; it appears in the tool bubble above the name tag
-
-### Sprite sheet layout
-
-Each character PNG is `112 × 96` pixels — 7 columns × 3 direction rows (down / up / right+left):
-
-| Col | Animation |
-|---|---|
-| 0–2 | Walk cycle (3 frames, mirrored for LEFT direction) |
-| 3–4 | Typing |
-| 5–6 | Reading (used when `currentStep` is Read/Grep/Glob/WebFetch) |
-
----
-
-## API routes
-
-| Route | Auth | Description |
-|---|---|---|
-| `GET /api/repos` | session | List user's GitHub repos (search) |
-| `GET /api/detect?repo=owner/name` | session | Scan workflows, return detection results |
-| `POST /api/spaces` | session | Create a new space |
-| `GET /api/spaces/[id]` | session | Get space config |
-| `PATCH /api/spaces/[id]` | session | Update workflow mapping or share settings |
-| `DELETE /api/spaces/[id]` | session | Delete space |
-| `GET /api/spaces/[id]/status` | session or share token | Live agent status + activity feed |
-| `PATCH /api/spaces/[id]/share` | session | Toggle share link |
-
-The status route accepts a `?share_token=` query param so the public share page can poll without a session cookie.
-
----
-
-## Database schema
-
-```
-users
-  id              text PK      (GitHub user ID)
-  username        text
-  avatar_url      text
-  github_token_enc text        (AES-256-GCM encrypted GitHub access token)
-  created_at      timestamp
-
-spaces
-  id              uuid PK
-  owner_id        text FK → users.id
-  name            text
-  repo_full_name  text         (e.g. "acme/backend")
-  workflow_config jsonb        (AgentRoleKey → { filename, cronExpression? })
-  share_token     uuid unique
-  share_enabled   boolean
-  created_at      timestamp
-```
-
----
-
-## Security notes
-
-- GitHub access tokens are encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_SECRET`. The raw token is never written to the database.
-- The share token is a random UUID. Revoking sharing invalidates it immediately (the status route checks `share_enabled`).
-- Auth.js JWT sessions are signed with `AUTH_SECRET`.
-
----
-
-## Project structure
+## Project Structure
 
 ```
 agent-hq/
 ├── app/
-│   ├── (auth)/page.tsx          — landing / sign-in page
-│   ├── dashboard/               — space list + new space wizard
-│   ├── spaces/[id]/page.tsx     — live office view (authenticated)
-│   ├── s/[share_token]/page.tsx — public share view
-│   └── api/                     — all API routes
+│   ├── (auth)/page.tsx              — landing / sign-in
+│   ├── dashboard/                   — space list + new space wizard
+│   ├── spaces/[id]/page.tsx         — live office view
+│   ├── spaces/[id]/settings/        — workflow settings page
+│   ├── s/[share_token]/page.tsx     — public share view
+│   └── api/                         — all API routes
 ├── components/
-│   ├── office/                  — GameCanvas, ActivityFeed, LogFeed, AgentDesk
-│   ├── spaces/                  — RepoPicker, WorkflowDetector, SpaceCard
-│   └── ui/                      — shadcn/ui primitives
-├── config/
-│   ├── agent-roles.ts           — role definitions & auto-detect config
-│   └── office-layout.ts         — grid config, poll interval
+│   ├── office/                      — GameCanvas, OfficeFloor, LogFeed, AgentDesk
+│   ├── spaces/                      — RepoPicker, WorkflowDetector, SpaceCard
+│   └── ui/                          — shadcn/ui primitives
 ├── lib/
-│   ├── game-engine/             — canvas renderer + game loop
-│   ├── build-agent-status.ts    — GitHub API → AgentStatus[]
-│   ├── detect-workflows.ts      — workflow scoring/detection
-│   ├── encrypt.ts               — AES-256-GCM token encryption
-│   ├── auth.ts                  — Auth.js config
-│   └── db/                      — Drizzle client + schema
-└── __tests__/                   — Vitest unit tests
+│   ├── game-engine/                 — canvas renderer + game loop
+│   ├── classify-workflows.ts        — signal-based workflow classifier
+│   ├── build-agent-status.ts        — GitHub API → AgentStatus[]
+│   ├── workflow-colors.ts           — deterministic color hashing
+│   ├── encrypt.ts                   — AES-256-GCM token encryption
+│   ├── auth.ts                      — Auth.js config
+│   └── db/                          — Drizzle client + schema
+├── config/
+│   └── office-layout.ts             — poll interval, grid config
+├── public/
+│   ├── sprites/                     — character sprite sheets (5 variants)
+│   └── assets/                      — furniture, floor tiles, character PNGs
+└── __tests__/                       — Vitest unit tests
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! Here are some areas where help would be great:
+
+### Good First Issues
+
+- **More AI action patterns** — add detection for more AI tools (Devin, Sweep, etc.)
+- **Sprite variants** — create new character sprite sheets for more visual variety
+- **Furniture assets** — add more office furniture (plants, whiteboards, coffee machines)
+- **Sound effects** — optional ambient office sounds and typing audio
+
+### Bigger Projects
+
+- **Custom themes** — let users choose different office themes (modern, retro, space station)
+- **Webhook mode** — replace polling with GitHub webhooks for instant updates
+- **Multi-repo spaces** — monitor multiple repos in one office
+- **Mobile layout** — responsive design for smaller screens
+- **Notification system** — alerts when agents fail or complete long-running tasks
+
+### Development Workflow
+
+```bash
+pnpm install
+pnpm dev          # start dev server
+pnpm test         # run tests
+pnpm test:watch   # watch mode
+pnpm lint         # ESLint
+pnpm db:push      # push schema changes
+pnpm db:studio    # open Drizzle Studio
+```
+
+Tests use Vitest. The classifier and status builder have comprehensive test coverage — please add tests for new features.
+
+---
+
+## Inspiration & References
+
+- [Pixel-art office games](https://store.steampowered.com/app/1708110/Idle_Startup_Tycoon/) — the visual style draws from top-down office management games
+- [GitHub Actions API](https://docs.github.com/en/rest/actions) — workflow runs, jobs, and step-level detail
+- [Claude Code Action](https://github.com/anthropic/claude-code-action) — the AI agent action that inspired this project
+- [A* Pathfinding](https://en.wikipedia.org/wiki/A*_search_algorithm) — used for character movement in the game engine
+
+---
+
+## Security
+
+- GitHub access tokens are **encrypted at rest** with AES-256-GCM using `TOKEN_ENCRYPTION_SECRET`
+- Share tokens are random UUIDs — revoking sharing invalidates access immediately
+- Auth.js JWT sessions are signed with `AUTH_SECRET`
+- No raw tokens are ever written to the database or exposed to the client
+
+---
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+<p align="center">
+  <sub>Built with pixels and caffeine by <a href="https://github.com/Adanielyan92">@Adanielyan92</a></sub>
+</p>
