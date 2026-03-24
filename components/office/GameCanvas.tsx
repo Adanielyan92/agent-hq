@@ -8,6 +8,8 @@ import { renderFrame } from '@/lib/game-engine/renderer';
 import { MAX_DELTA_TIME_SEC, TILE_SIZE } from '@/lib/game-engine/types';
 import type { LoungeMode } from '@/lib/game-engine/types';
 import type { AgentStatus } from '@/lib/types';
+import { createAgentHqLayout } from '@/lib/game-engine/agentHqLayout';
+import { createAgentHqLayoutLarge, LOUNGE_TILES_LARGE } from '@/lib/game-engine/agentHqLayoutLarge';
 
 interface Props {
   agents: AgentStatus[];
@@ -28,18 +30,15 @@ export function GameCanvas({ agents }: Props) {
   const prevActiveRef = useRef<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Flipped to true once OfficeState has been created (deferred until first agent data)
+  const [engineReady, setEngineReady] = useState(false);
 
-  // ── Initialize engine on mount ──────────────────────────────
+  // ── Load assets on mount ───────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     loadGameAssets().then((assets) => {
       if (cancelled) return;
       assetsRef.current = assets;
-
-      const state = new OfficeState();
-      stateRef.current = state;
-
-      // Do NOT pre-create any agents — the first status sync will create them.
       setLoading(false);
     }).catch((err: unknown) => {
       if (cancelled) return;
@@ -50,13 +49,21 @@ export function GameCanvas({ agents }: Props) {
 
   // ── Sync agent status → game state ──────────────────────────
   useEffect(() => {
-    // Wait until assets are loaded and game state is initialized
+    // Wait until assets are loaded
     if (loading || error) return;
-    const state = stateRef.current;
-    if (!state) return;
 
     // Skip sync when no agent data has arrived yet
     if (agents.length === 0) return;
+
+    // Lazily create OfficeState on first agent arrival (layout chosen once)
+    if (!stateRef.current) {
+      const useLarge = agents.length > 6;
+      const layout = useLarge ? createAgentHqLayoutLarge() : createAgentHqLayout();
+      const loungeTiles = useLarge ? LOUNGE_TILES_LARGE : undefined;
+      stateRef.current = new OfficeState(layout, loungeTiles);
+      setEngineReady(true);
+    }
+    const state = stateRef.current;
 
     const agentMap = agentMapRef.current;
     const currentIds = new Set(agents.map(a => a.id));
@@ -129,7 +136,7 @@ export function GameCanvas({ agents }: Props) {
 
   // ── Game loop ────────────────────────────────────────────────
   useEffect(() => {
-    if (loading || error) return;
+    if (loading || error || !engineReady) return;
 
     const canvas = canvasRef.current;
     const state  = stateRef.current;
@@ -170,7 +177,7 @@ export function GameCanvas({ agents }: Props) {
     lastTimeRef.current = performance.now();
     rafRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
-  }, [loading, error]);
+  }, [loading, error, engineReady]);
 
   if (error) {
     return (
