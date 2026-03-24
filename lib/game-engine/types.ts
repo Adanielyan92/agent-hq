@@ -41,6 +41,8 @@ export interface Seat {
   assigned: boolean;
 }
 
+export type LoungeMode = 'idle' | 'coffee' | 'sleeping';
+
 export interface Character {
   id: number;
   state: CharacterState;
@@ -63,6 +65,8 @@ export interface Character {
   seatTimer: number;
   /** Role name for the name tag */
   roleName: string;
+  /** Visual sub-state when lounging (idle / coffee / sleeping) */
+  loungeMode: LoungeMode;
 }
 
 export interface FurnitureEntry {
