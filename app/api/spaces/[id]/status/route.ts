@@ -3,10 +3,10 @@ import { db } from '@/lib/db';
 import { users, spaces } from '@/lib/db/schema';
 import { decrypt } from '@/lib/encrypt';
 import { fetchWorkflowRuns, fetchOpenIssues, fetchOpenPRs, fetchRecentlyMergedPRs, fetchRunJobs, fetchJobLogsSnippet } from '@/lib/github';
-import { buildAgentStatus, buildActivityFeed, type JobsMap } from '@/lib/build-agent-status';
+import { buildAgentStatus, buildActivityFeed, migrateOldConfig, type JobsMap } from '@/lib/build-agent-status';
 import { eq, and } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import type { SpaceStatusResponse } from '@/lib/types';
+import type { SpaceStatusResponse, WorkflowEntry } from '@/lib/types';
 
 export async function GET(
   req: NextRequest,
@@ -29,6 +29,15 @@ export async function GET(
       where: and(eq(spaces.id, id), eq(spaces.owner_id, session.user.id)),
     });
     if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Lazy migration from old format
+  let workflowEntries: WorkflowEntry[];
+  if (Array.isArray(space.workflow_config)) {
+    workflowEntries = space.workflow_config as WorkflowEntry[];
+  } else {
+    workflowEntries = migrateOldConfig(space.workflow_config as Record<string, any>);
+    await db.update(spaces).set({ workflow_config: workflowEntries }).where(eq(spaces.id, space.id));
   }
 
   const owner = await db.query.users.findFirst({ where: eq(users.id, space.owner_id) });
@@ -72,7 +81,7 @@ export async function GET(
   );
 
   const agents = buildAgentStatus(
-    space.workflow_config, runsData.workflow_runs, openIssues, openPRs, mergedPRs, jobsMap, logSnippetsMap
+    workflowEntries, runsData.workflow_runs, openIssues, openPRs, mergedPRs, jobsMap, logSnippetsMap
   );
   const activityFeed = buildActivityFeed(
     runsData.workflow_runs, openPRs, mergedPRs, openIssues

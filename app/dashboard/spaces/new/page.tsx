@@ -7,7 +7,7 @@ import { WorkflowDetector } from '@/components/spaces/WorkflowDetector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { GHRepo } from '@/lib/github';
-import type { DetectionResult, WorkflowConfig } from '@/lib/types';
+import type { ClassifiedWorkflow } from '@/lib/types';
 import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
 
 export default function NewSpacePage() {
@@ -15,7 +15,7 @@ export default function NewSpacePage() {
   const [selectedRepo, setSelectedRepo] = useState<GHRepo | null>(null);
   const [spaceName, setSpaceName] = useState('');
   const [detecting, setDetecting] = useState(false);
-  const [results, setResults] = useState<DetectionResult[] | null>(null);
+  const [results, setResults] = useState<ClassifiedWorkflow[] | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleRepoSelect(repo: GHRepo) {
@@ -39,9 +39,7 @@ export default function NewSpacePage() {
   async function handleCreate() {
     if (!selectedRepo || !results) return;
     setSaving(true);
-    const workflow_config = Object.fromEntries(
-      results.map((r) => [r.role, r.matched])
-    ) as WorkflowConfig;
+    const workflow_config = results;
     const res = await fetch('/api/spaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
